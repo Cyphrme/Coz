@@ -353,12 +353,19 @@ methods are outside the scope of Coz.
 
 ## Alg
 `alg` specifies a parameter set and is a single source of truth for Coz
- cryptographic operations.
+cryptographic operations.
 
 Instead of a registry, supported algorithms and their exact parameters are
 defined in the reference implementation (Go). Implementations must match these
 parameters for interoperability and correctness.
 
+For key algorithms, Coz assumes a **Deterministic Public-from-Private
+Derivability** property: `pub` can be deterministically derived from `prv` and
+not from any separate seed or intermediate value. Future algorithms must be
+constructed to support this property.
+
+Since the delimiter `:` is used for serialization, future Coz `alg` labels must
+never use the character `:`.
 
 ### Example - "alg":"ES256"
 
@@ -386,13 +393,6 @@ parameters for interoperability and correctness.
 - Ed25519
 - Ed25519ph
 - ES256k
-
-Since the delimiter `:` is used for serialization, future Coz `alg` labels must
-never use the character `:`.
-
-Coz assumes `pub` can be deterministically derived from `prv` for all supported
-algorithms.
-
 
 ---
 ## End of Coz Specification
