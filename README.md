@@ -394,15 +394,14 @@ Coz assumes `pub` can be deterministically derived from `prv` for all supported
 algorithms.
 
 
-
 ---
 ## End of Coz Specification
 
 The above sections starting at [# Coz](#coz) constitute the Coz specification.
 The following sections contain additional guidance, examples, philosophy, and
 implementation notes that are informative but not normative.
----
 
+---
 
 ## Coz Verifier
 The Coz verifier is an in-browser tool for signing and verifying.
