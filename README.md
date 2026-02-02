@@ -38,13 +38,14 @@ See also [the Coz philosophy](#the-coz-philosophy-of-abstraction)
 
 ### Coz Fields
 
-Coz defines standard fields for the objects `pay`, `key`, and `coz`. Applications
-may include additional fields as desired. While all fields are optional,
-omitting standard fields may limit compatibility. Binary values are encoded as
-[RFC 4648 base 64 URI canonical with padding truncated][RFC4648] (b64ut). JSON
-components are serialized into UTF-8 for signing, verification, and hashing. All
-JSON fields must be unique, and unmarshalling JSON with duplicate fields must
-result in an error. All timestamp values should be UTC Unix time.
+Coz defines standard fields for the objects `pay`, `key`, and `coz`.
+Applications may include additional fields as desired. While all fields are
+optional, omitting standard fields may limit compatibility. Binary values are
+encoded as [RFC 4648 base 64 URI canonical with padding truncated][RFC4648]
+(b64ut). JSON components are serialized into UTF-8 for signing, verification,
+and hashing. All JSON fields must be unique, and unmarshalling JSON with
+duplicate fields must result in an error. All timestamp values should be UTC
+Unix time.
 
 #### All Coz Standard Fields
 
@@ -316,9 +317,10 @@ coz:ES256:U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg
 ```
 
 ## Revoke
-A Coz key may be revoked by signing a coz containing the field `rvk` with an
-integer value greater than `0`. The integer value `1` is suitable to denote
-revocation and the current Unix timestamp is the suggested value.
+A revoke is a self-signed declaration that a key is compromised. A Coz key may
+revoke itself by signing a coz containing the field `rvk` with an integer value
+greater than `0`. The integer value `1` is suitable to denote revocation and the
+current Unix timestamp is the suggested value.
 
 - `rvk` - Unix timestamp of key expiry.
 
