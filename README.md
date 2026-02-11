@@ -61,7 +61,7 @@ additional application fields. In the first example `msg` is additional.
 - `alg` - Specific cryptographic algorithm. E.g. `"ES256"`
 - `now` - Unix time of message signature. E.g. `1623132000`
 - `tmb` - Thumbprint of the signature's key. E.g. `"U5XUZ..."`
-- `typ` - Type of `pay`. E.g. `"cyphr.me/msg"`
+- `typ` - Type of `pay`. E.g. `"cyphr.me/msg/create"`
 - `msg` - Message payload (string). E.g. `"Coz is a cryptographic JSON messaging specification."`
 - `dig` - Digest of external content. E.g. `"LSgWE4v..."`
 
@@ -80,7 +80,7 @@ application defined programmatic functions. In the first example,
   "alg":"ES256",
   "now":1623132000,
   "pub":"2nTOaFVm2QLxmUO_SjgyscVHBtvHEfo2rq65MvgNRjORojq39Haq9rXNxvXxwba_Xj0F5vZibJR3isBdOWbo5g",
-  "tag":"Zami's Majuscule Key.",
+  "tag":"Coz Example Key",
   "tmb":"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg"
 }
 ```
@@ -93,7 +93,7 @@ application defined programmatic functions. In the first example,
   "now":1623132000,
   "prv":"bNstg4_H3m3SlROufwRSEgibLrBuRq9114OvdapcpVA",
   "pub":"2nTOaFVm2QLxmUO_SjgyscVHBtvHEfo2rq65MvgNRjORojq39Haq9rXNxvXxwba_Xj0F5vZibJR3isBdOWbo5g",
-  "tag":"Zami's Majuscule Key.",
+  "tag":"Coz Example Key",
   "tmb":"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg"
 }
 ```
@@ -135,11 +135,11 @@ The JSON name `coz` may be used to wrap a coz.
 ### `coz` Standard Fields
 
 - `coz` "Coz" Coz object. E.g. `{"coz":{"pay":..., sig:...}}`
-- `can` "Canon" Canon of `pay`. E.g. `["alg","now","tmb","typ"]`
-- `cad` "Canon digest" Digest of `pay`. E.g. `"LSgWE4v..."`
-- `czd` "Coz digest" Digest of `["cad","sig"]`. E.g. `d0ygwQ...`
-- `pay` "Payload" Signed payload. E.g. `"pay":{"alg":...}`
-- `sig` "Signature" Signature over `cad`. E.g. `"sig":"ywctP6..."`
+- `can` "Canon" Canon of `pay`. E.g. `["msg","alg","now","tmb","typ"]`
+- `cad` "Canon digest" Digest of `pay`. E.g. `"XzrXMG..."`
+- `czd` "Coz digest" Digest of `["cad","sig"]`. E.g. `xrYMu8...`
+- `pay` "Payload" Signed payload. E.g. `"pay":{"msg":...,"alg":...}`
+- `sig` "Signature" Signature over `cad`. E.g. `"sig":"OJ4_ti..."`
 
 `sig` is the signature over the raw bytes of `cad` (the b64ut-decoded digest).
 `cad` is not rehashed before signing. `czd`'s hashing algorithm must align with
@@ -177,7 +177,7 @@ A tautologic coz:
       "alg":"ES256",
       "now":1623132000,
       "pub":"2nTOaFVm2QLxmUO_SjgyscVHBtvHEfo2rq65MvgNRjORojq39Haq9rXNxvXxwba_Xj0F5vZibJR3isBdOWbo5g",
-      "tag":"Zami's Majuscule Key.",
+      "tag":"Coz Example Key",
       "tmb":"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg"
     },
     "can": ["msg","alg","now","tmb","typ"],
