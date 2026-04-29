@@ -121,7 +121,9 @@ func ExamplePay_dig() {
 	// {"pay":{"alg":"ES256","tmb":"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg","typ":"cyphr.me/file","dig":"YBG8cU5hkhPdyEJDhRB0Qk90NZuU0B34dnMQbkFMtBI"}}
 }
 
-// ExamplePay_jsonUnmarshal tests unmarshalling a Pay.
+// ExamplePay_jsonUnmarshal tests round trip unmarshalling a Pay (with "custom"
+// type `msg`, which does not appear in Pay; there is no Pay.MSG).  Round trip
+// unmarshal, marshal, and unmarshal again.
 func ExamplePay_jsonUnmarshal() {
 	h := &Pay{}
 
@@ -130,14 +132,23 @@ func ExamplePay_jsonUnmarshal() {
 		panic(err)
 	}
 
-	out, err := Marshal(h)
+	marshaled, err := Marshal(h)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("%s\n", out)
+
+	// And one last round trip Unmarshal
+	roundTrip := &Pay{}
+	err = json.Unmarshal([]byte(GoldenPay), roundTrip)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("%s\n", marshaled)
+	fmt.Printf("%s\n", roundTrip)
 
 	// Output:
-	// {"alg":"ES256","now":1623132000,"tmb":"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg","typ":"cyphr.me/msg/create"}
+	// {"alg":"ES256","now":1623132000,"tmb":"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg","typ":"cyphr.me/msg/create","msg":"Coz is a cryptographic JSON messaging specification."}
+	// {"alg":"ES256","now":1623132000,"tmb":"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg","typ":"cyphr.me/msg/create","msg":"Coz is a cryptographic JSON messaging specification."}
 }
 
 // ExamplePay_jsonMarshalCustom demonstrates marshalling Pay with a custom
@@ -166,8 +177,9 @@ func ExamplePay_jsonMarshalCustom() {
 	// {"alg":"ES256","now":1623132000,"tmb":"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg","typ":"cyphr.me/msg/create","msg":"Coz is a cryptographic JSON messaging specification."}
 }
 
-// ExamplePay_jsonUnmarshalCustomManual demonstrates "manually" unmarshalling
-// Pay with a custom structure.
+// ExamplePay_jsonUnmarshalCustomManual demonstrates "manually" unmarshalling,
+// that is calling package json.Unmarshal instead of the Coz helpers. This test
+// requires Pay.Struct to be properly populated from an json.Unmarshal.
 func ExamplePay_jsonUnmarshalCustomManual() {
 	var pay Pay
 	err := json.Unmarshal([]byte(GoldenPay), &pay)
@@ -176,16 +188,8 @@ func ExamplePay_jsonUnmarshalCustomManual() {
 	}
 	fmt.Println(pay)
 
-	var custom CustomStruct
-	err = json.Unmarshal([]byte(GoldenPay), &custom)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(custom)
-
 	// Output:
-	// {"alg":"ES256","now":1623132000,"tmb":"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg","typ":"cyphr.me/msg/create"}
-	// {Coz is a cryptographic JSON messaging specification.}
+	// {"alg":"ES256","now":1623132000,"tmb":"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg","typ":"cyphr.me/msg/create","msg":"Coz is a cryptographic JSON messaging specification."}
 }
 
 // ExamplePay_jsonUnmarshalCustom demonstrates unmarshalling Pay with a custom
@@ -280,6 +284,46 @@ func ExampleCoz_String() {
 
 	// Output:
 	// {"pay":{"msg":"Coz is a cryptographic JSON messaging specification.","alg":"ES256","now":1623132000,"tmb":"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg","typ":"cyphr.me/msg/create"},"sig":"OJ4_timgp-wxpLF3hllrbe55wdjhzGOLgRYsGO1BmIMYbo4VKAdgZHnYyIU907ZTJkVr8B81A2K8U4nQA6ONEg"}
+}
+
+// TestPay_SignPayJSON_CustomFields tests that custom fields in a JSON payload
+// are preserved when SignPayJSON auto-updates the "now" field.
+func TestPay_SignPayJSON_CustomFields(t *testing.T) {
+	// A JSON payload with an arbitrary custom field "custom_field".
+	payJSON := json.RawMessage([]byte(`{
+		"alg": "ES256",
+		"now": 1000,
+		"tmb": "U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg",
+		"typ": "cyphr.me/test",
+		"msg": "Coz custom field test",
+		"custom_field": "should be preserved"
+	}`))
+
+	coz, err := GoldenKey.SignPayJSON(payJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify the signature.
+	valid, err := GoldenKey.VerifyCoz(coz)
+	if !valid || err != nil {
+		t.Fatalf("Coz failed to verify: %v", err)
+	}
+
+	// Verify "custom_field" is still in the payload.
+	var payMap map[string]interface{}
+	if err := json.Unmarshal(coz.Pay, &payMap); err != nil {
+		t.Fatal(err)
+	}
+
+	if val, ok := payMap["custom_field"]; !ok || val != "should be preserved" {
+		t.Errorf("Custom field was dropped or modified: %v", payMap)
+	}
+
+	// Verify "now" was updated.
+	if now, ok := payMap["now"].(float64); !ok || int64(now) <= 1000 {
+		t.Errorf("Now field was not updated correctly: %v", payMap["now"])
+	}
 }
 
 func ExampleCoz_Meta() {

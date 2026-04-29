@@ -325,8 +325,8 @@ current Unix timestamp is the suggested value.
 - `rvk` - Unix timestamp of key expiry.
 
 `rvk` and `now` must be positive integers less than 2^53 – 1
-(9,007,199,254,740,991), the maximum safe integer in IEEE 754 double-precision  
-floating-point format. Implementations must error if either value is not an  
+(9,007,199,254,740,991), which is the integer precision limit specified by 
+IEEE 754 minus one. Implementations must error if either value is not an 
 integer or is larger than 2^53 - 1.
 
 Coz explicitly defines a self-revoke method so that third parties may revoke

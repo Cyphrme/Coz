@@ -91,8 +91,13 @@ func (cz *Coz) Meta() (err error) {
 //
 // MetaWithAlg does no cryptographic verification.
 func (cz *Coz) MetaWithAlg(alg SEAlg) (err error) {
+	// Ensure Parsed is allocated.
+	if cz.Parsed == nil {
+		cz.Parsed = new(Pay)
+	}
+
 	// Set Parsed from Pay.
-	err = json.Unmarshal(cz.Pay, &cz.Parsed)
+	err = json.Unmarshal(cz.Pay, cz.Parsed)
 	if err != nil {
 		return err
 	}
@@ -114,7 +119,7 @@ func (cz *Coz) MetaWithAlg(alg SEAlg) (err error) {
 	if err != nil {
 		return err
 	}
-	cz.Czd = []byte{} // Zero `czd` in case Coz.Sig is not set.
+	cz.Czd = nil // Zero `czd` in case Coz.Sig is not set.
 	if len(cz.Sig) != 0 {
 		cz.Czd, err = GenCzd(alg.Hash(), cz.Cad, cz.Sig)
 		return err
@@ -234,22 +239,35 @@ func (p *Pay) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
-	if p.Struct != nil { // Inner custom application struct.
-		str := p.Struct
-		err = json.Unmarshal(b, str)
-		if err != nil {
-			return err
+
+	// Inner custom application struct.
+	customHandled := false
+	// Case 1: Caller pre-set a custom struct pointer on *p.
+	if p.Struct != nil {
+		if _, ok := p.Struct.(map[string]json.RawMessage); !ok {
+
+			str := p.Struct
+			if err = json.Unmarshal(b, str); err != nil {
+				return err
+			}
+			p2.Struct = str
+			customHandled = true
 		}
-		p2.Struct = str
+		// If it was the internal map, fall through to case 2 (re-capture extras)
 	}
-
-	// if p2.Now > MaxSafeTimestamp || p2.Now < 0 {
-	// 	return fmt.Errorf("Pay.UnmarshalJSON: values for now must be between 0 and 2^53 - 1")
-	// }
-
-	// if p2.Rvk > MaxSafeTimestamp || p2.Rvk < 0 {
-	// 	return fmt.Errorf("Pay.UnmarshalJSON: values for rvk must be between 0 and 2^53 - 1")
-	// }
+	// Case 2: Manual unmarshal to capture extra fields from raw JSON
+	if !customHandled {
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal(b, &m); err == nil {
+			// Remove known Coz fields so only custom fields remain
+			for _, k := range []string{"alg", "now", "tmb", "typ", "rvk"} {
+				delete(m, k)
+			}
+			if len(m) > 0 {
+				p2.Struct = m
+			}
+		}
+	}
 
 	// Enforce revoke message max size to prevent DoS attacks.
 	if p2.Rvk > 0 && RVK_MAX_SIZE > 0 && len(b) > RVK_MAX_SIZE {
