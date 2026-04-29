@@ -221,9 +221,20 @@ func (c *Key) SignPayJSON(pay json.RawMessage) (coz *Coz, err error) {
 	}
 	// Auto-update now if present (non-zero).
 	if p.Now != 0 {
-		p.Now = Now()
-		// Must re-marshal since we modified p.Now and the JSON needs updating.
-		return c.signPayJSON(p, nil)
+		p.Now = Now() // Use Now() per existing code logic.
+		// Use orderedMap to update "now" without dropping custom fields
+		// or mutating the JSON field order.
+		om := newOrderedMap()
+		err = json.Unmarshal(pay, om)
+		if err != nil {
+			return nil, err
+		}
+		om.Set("now", p.Now)
+		b, err := om.MarshalJSON()
+		if err != nil {
+			return nil, err
+		}
+		return c.signPayJSON(p, b)
 	}
 	return c.signPayJSON(p, pay)
 }

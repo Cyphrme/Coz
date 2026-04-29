@@ -216,6 +216,46 @@ func ExampleKey_SignPayJSON() {
 	// Output: true <nil>
 }
 
+// Test_SignPayJSON_CustomFields tests that custom fields in a JSON payload are
+// preserved when SignPayJSON auto-updates the "now" field.
+func Test_SignPayJSON_CustomFields(t *testing.T) {
+	// A JSON payload with an arbitrary custom field "custom_field".
+	payJSON := []byte(`{
+		"msg": "Coz custom field test",
+		"alg": "ES256",
+		"now": 1000,
+		"tmb": "U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg",
+		"typ": "cyphr.me/test",
+		"custom_field": "should be preserved"
+	}`)
+
+	coz, err := GoldenKey.SignPayJSON(json.RawMessage(payJSON))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify the signature.
+	valid, err := GoldenKey.VerifyCoz(coz)
+	if !valid || err != nil {
+		t.Fatalf("Coz failed to verify: %v", err)
+	}
+
+	// Verify "custom_field" is still in the payload.
+	var payMap map[string]interface{}
+	if err := json.Unmarshal(coz.Pay, &payMap); err != nil {
+		t.Fatal(err)
+	}
+
+	if val, ok := payMap["custom_field"]; !ok || val != "should be preserved" {
+		t.Errorf("Custom field was dropped or modified: %v", payMap)
+	}
+
+	// Verify "now" was updated.
+	if now, ok := payMap["now"].(float64); !ok || int64(now) <= 1000 {
+		t.Errorf("Now field was not updated correctly: %v", payMap["now"])
+	}
+}
+
 // ExampleKey_Sign_empty demonstrates signing of empty Coz,
 // `{"pay":{},"sig":"9iesKU..."}`, is valid.
 func ExampleKey_SignPayJSON_empty() {
