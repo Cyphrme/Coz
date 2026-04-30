@@ -288,17 +288,20 @@ func ExampleCoz_String() {
 }
 
 // TestPay_SignPayJSON_CustomFields tests that custom fields in a JSON payload
-// are preserved when SignPayJSON auto-updates the "now" field.
-// TODO I think we can test order on this as well.
+// are preserved and ordered properly with SignPayJSON.
 func TestPay_SignPayJSON_CustomFields(t *testing.T) {
-	// A JSON payload with an arbitrary custom field "custom_field".
+	// A JSON payload with custom fields. Custom fields are deliberately
+	// anti-alphabetical ("z_last" before "a_first") so that any map-based
+	// remarshal will detectably reorder them.
 	payJSON := json.RawMessage([]byte(`{
 		"alg": "ES256",
 		"now": 1000,
 		"tmb": "U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg",
 		"typ": "cyphr.me/test",
 		"msg": "Coz custom field test",
-		"custom_field": "should be preserved"
+		"custom_field": "should be preserved",
+		"z_last": "should appear first",
+		"a_first": "should appear second"
 	}`))
 
 	coz, err := GoldenKey.SignPayJSON(payJSON)
@@ -312,7 +315,7 @@ func TestPay_SignPayJSON_CustomFields(t *testing.T) {
 		t.Fatalf("Coz failed to verify: %v", err)
 	}
 
-	// Verify "custom_field" is still in the payload.
+	// Verify "custom_field" is still in the payload
 	var payMap map[string]interface{}
 	if err := json.Unmarshal(coz.Pay, &payMap); err != nil {
 		t.Fatal(err)
@@ -326,34 +329,8 @@ func TestPay_SignPayJSON_CustomFields(t *testing.T) {
 	if now, ok := payMap["now"].(float64); !ok || int64(now) <= 1000 {
 		t.Errorf("Now field was not updated correctly: %v", payMap["now"])
 	}
-}
 
-// TestPay_SignPayJSON_FieldOrder tests that SignPayJSON preserves the byte-level
-// field ordering of the input payload after the "now" auto-update.  Custom
-// fields are deliberately anti-alphabetical ("z_last" before "a_first") so that
-// any map-based remarshal will detectably reorder them.
-func TestPay_SignPayJSON_FieldOrder(t *testing.T) {
-	payJSON := json.RawMessage([]byte(`{
-		"alg": "ES256",
-		"now": 1000,
-		"tmb": "U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg",
-		"typ": "cyphr.me/test",
-		"z_last": "should appear first",
-		"a_first": "should appear second"
-	}`))
-
-	cz, err := GoldenKey.SignPayJSON(payJSON)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Verify signature is valid.
-	valid, err := GoldenKey.VerifyCoz(cz)
-	if !valid || err != nil {
-		t.Fatalf("Coz failed to verify: %v", err)
-	}
-
-	out := string(cz.Pay)
+	out := string(coz.Pay)
 
 	// Verify both custom fields are present.
 	if !strings.Contains(out, `"z_last"`) {
@@ -371,15 +348,6 @@ func TestPay_SignPayJSON_FieldOrder(t *testing.T) {
 	aIdx := strings.Index(out, `"a_first"`)
 	if zIdx >= aIdx {
 		t.Errorf("SignPayJSON destroyed field order: z_last at byte %d, a_first at byte %d.\nPayload: %s", zIdx, aIdx, out)
-	}
-
-	// Verify "now" was updated (not the original seed value).
-	var payMap map[string]interface{}
-	if err := json.Unmarshal(cz.Pay, &payMap); err != nil {
-		t.Fatal(err)
-	}
-	if now, ok := payMap["now"].(float64); !ok || int64(now) <= 1000 {
-		t.Errorf("Now field was not updated correctly: %v", payMap["now"])
 	}
 }
 

@@ -135,9 +135,10 @@ func (cz *Coz) UnmarshalJSON(b []byte) error {
 		return err
 	}
 
-	// TODO seems wrong.  Do we need the other type Coz fields?
 	type coz2 Coz // Break infinite unmarshal loop
 	cz2 := new(coz2)
+	// Set perviously set Coz values except Pay, which is populated from
+	// json.Unmarshal.
 	cz2.Parsed = cz.Parsed
 	cz2.Key = cz.Key
 	err = json.Unmarshal(b, cz2)
@@ -256,7 +257,7 @@ func (p *Pay) UnmarshalJSON(b []byte) (err error) {
 
 	// If caller pre-set a typed struct, unmarshal custom fields into it.
 	// Struct tag order is canonical for typed structs, so don't set can.
-	// A map from a prior Case 2 unmarshal is not a caller-provided struct.
+	// A map from a prior, Case 2, unmarshal is not a caller-provided struct.
 	_, isMap := p.Struct.(map[string]json.RawMessage)
 	if p.Struct != nil && !isMap {
 		str := p.Struct
