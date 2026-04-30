@@ -130,11 +130,12 @@ func (cz *Coz) MetaWithAlg(alg SEAlg) (err error) {
 // UnmarshalJSON unmarshals checks for duplicates and unmarshals `coz`.
 // See notes on Pay.UnmarshalJSON.
 func (cz *Coz) UnmarshalJSON(b []byte) error {
-	err := checkDuplicate(json.NewDecoder(bytes.NewReader(b)))
+	_, err := checkDuplicate(json.NewDecoder(bytes.NewReader(b)))
 	if err != nil {
 		return err
 	}
 
+	// TODO seems wrong.  Do we need the other type Coz fields?
 	type coz2 Coz // Break infinite unmarshal loop
 	cz2 := new(coz2)
 	cz2.Parsed = cz.Parsed
@@ -165,12 +166,14 @@ func GenCzd(hash HshAlg, cad B64, sig B64) (czd B64, err error) {
 // for creating custom cozies (see example ExampleKey_SignPay).
 //
 // The JSON tags on [Alg, Iat, Tmb, Typ, Rvk, Struct] are ineffective due to the
-// custom MarshalJSON(), however they are present for documentation.
+// custom MarshalJSON(), however they are present for documentation
+// completeness.
 //
-// `Struct` will be marshaled when not empty. The custom marshaller promotes
-// fields inside `Struct` to be top level fields inside of `pay`. The tag
-// `json:"-"` is ignored by the custom marshaller, and  is set to "-" so that the
-// default marshaller does not include it.
+// Field struct must be of type struct, however this is enforced only at
+// runtime.  `Struct` will be marshaled when not empty. The custom marshaller
+// promotes fields inside `Struct` to be top level fields inside of `pay`. The
+// tag `json:"-"` is ignored by the custom marshaller, and is set to "-" so
+// that the default marshaller does not include it.
 type Pay struct {
 	Alg SEAlg     `json:"alg,omitempty"` // e.g. "ES256"
 	Now Timestamp `json:"now,omitempty"` // e.g. 1623132000
@@ -180,8 +183,15 @@ type Pay struct {
 	// Rvk is only for revoke messages.
 	Rvk Timestamp `json:"rvk,omitempty"` // e.g. 1623132000
 
-	// Custom arbitrary struct given by application.
+	// Custom arbitrary struct given by application. Really wish this could be
+	// type `Struct`, but it appears the only way in Go for this to be compile
+	// time checked is generics, which pollutes the outer struct as a generic
+	// (generic contagion).  The best run time check is `v :=
+	// reflect.ValueOf(custom) if v.Kind() != reflect.Struct`
 	Struct any `json:"-"`
+
+	// Maintain order from incoming bytes for json.Unmarshal.
+	can []string `json:"-"`
 }
 
 // Coz returns a new coz with only Pay populated.
@@ -206,7 +216,6 @@ func (p Pay) String() string {
 // https://jhall.io/posts/go-json-tricks-embedded-marshaler
 func (p *Pay) MarshalJSON() ([]byte, error) {
 	type pay2 Pay // Break infinite Marshal loop
-
 	pay, err := Marshal((*pay2)(p))
 	if err != nil {
 		return nil, err
@@ -220,15 +229,20 @@ func (p *Pay) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 	// Concatenate the two:
-	s[0] = ','
-	return append(pay[:len(pay)-1], s...), nil
+	s[0] = ',' // Change from "{" to ","
+	bytes := append(pay[:len(pay)-1], s...)
+
+	if p.can != nil {
+		return Canonical(bytes, p.can)
+	}
+	return bytes, nil
 }
 
 // UnmarshalJSON unmarshals both Pay and if given custom Pay.Struct. Throws an
 // error on duplicate. (Duplicate related, see
 // https://github.com/golang/go/issues/48298)
-func (p *Pay) UnmarshalJSON(b []byte) error {
-	err := checkDuplicate(json.NewDecoder(bytes.NewReader(b)))
+func (p *Pay) UnmarshalJSON(b []byte) (err error) {
+	canon, err := checkDuplicate(json.NewDecoder(bytes.NewReader(b)))
 	if err != nil {
 		return err
 	}
@@ -239,33 +253,16 @@ func (p *Pay) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
+	p2.can = canon
 
-	// Inner custom application struct.
-	customHandled := false
-	// Case 1: Caller pre-set a custom struct pointer on *p.
-	if p.Struct != nil {
-		if _, ok := p.Struct.(map[string]json.RawMessage); !ok {
-
-			str := p.Struct
-			if err = json.Unmarshal(b, str); err != nil {
-				return err
-			}
-			p2.Struct = str
-			customHandled = true
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err == nil {
+		// Remove Pay Coz fields so only custom fields remain
+		for _, k := range []string{"alg", "now", "tmb", "typ", "rvk"} {
+			delete(m, k)
 		}
-		// If it was the internal map, fall through to case 2 (re-capture extras)
-	}
-	// Case 2: Manual unmarshal to capture extra fields from raw JSON
-	if !customHandled {
-		var m map[string]json.RawMessage
-		if err := json.Unmarshal(b, &m); err == nil {
-			// Remove known Coz fields so only custom fields remain
-			for _, k := range []string{"alg", "now", "tmb", "typ", "rvk"} {
-				delete(m, k)
-			}
-			if len(m) > 0 {
-				p2.Struct = m
-			}
+		if len(m) > 0 {
+			p2.Struct = m
 		}
 	}
 
@@ -411,58 +408,64 @@ func isRevoke(rvk Timestamp) bool {
 // ErrJSONDuplicate allows applications to check for JSON duplicate error.
 type ErrJSONDuplicate error
 
-// checkDuplicate checks for JSON duplicates. See notes on Marshal and the
-// README FAQ on duplicate fields.
-func checkDuplicate(d *json.Decoder) error {
+// checkDuplicate checks for JSON duplicates and if not duplicated returns the
+// top level unique keys. See notes on Marshal and the README FAQ on duplicates.
+func checkDuplicate(d *json.Decoder) (topLevelObjectKeys []string, e error) {
 	t, err := d.Token()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Is it a delimiter?
 	delim, ok := t.(json.Delim)
 	if !ok {
-		return nil // scaler type, nothing to do
+		return nil, nil // scaler type, nothing to do
 	}
 
 	switch delim {
 	case '{':
-		keys := make(map[string]bool)
+		keysBool := make(map[string]bool)
+		var keys []string // preserves order
+
 		for d.More() {
-			t, err := d.Token() // Get field key.
+			t, err := d.Token()
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			key := t.(string)
-			if keys[key] { // Check for duplicates.
-				return ErrJSONDuplicate(fmt.Errorf("Coz: JSON duplicate field %q", key))
+			if keysBool[key] {
+				return nil, ErrJSONDuplicate(fmt.Errorf("Coz: JSON duplicate field %q", key))
 			}
-			keys[key] = true
+
+			keysBool[key] = true
+			keys = append(keys, key)
 
 			// Recursive, Check value in case value is object.
-			err = checkDuplicate(d)
-			if err != nil {
-				return err
+			if _, err = checkDuplicate(d); err != nil {
+				return nil, err
 			}
 		}
+
 		// consume trailing }
 		if _, err := d.Token(); err != nil {
-			return err
+			return nil, err
 		}
+
+		return keys, nil
 
 	case '[':
 		for d.More() {
-			if err := checkDuplicate(d); err != nil {
-				return err
+			if _, err := checkDuplicate(d); err != nil {
+				return nil, err
 			}
 		}
 		// consume trailing ]
 		if _, err := d.Token(); err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 // Timestamp is positive UTC Unix time in seconds with a max value of 2^53 - 1.

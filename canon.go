@@ -50,6 +50,18 @@ func Canonical(input []byte, canon any) (b []byte, err error) {
 		}
 
 		return Marshal(mm)
+
+		// Alternatively:
+		// 		// Use orderedMap to preserve canon order
+		// // TODO write a test on this.
+		// om := newOrderedMap()
+		// for i := 0; i < len(s); i++ {
+		// 	if val, ok := m[s[i]]; ok {
+		// 		om.Set(s[i], val)
+		// 	}
+		// }
+
+		// return Marshal(om)
 	}
 
 	// Unmarshal the given bytes into the given canonical format.

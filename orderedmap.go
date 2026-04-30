@@ -162,7 +162,7 @@ func (o *orderedMap) UnmarshalJSON(b []byte) error {
 	// duplicates. "Last value wins" is bad practice.  See
 	// https://esdiscuss.org/topic/json-duplicate-keys and the Coz docs on
 	// duplicate JSON keys.
-	err := checkDuplicate(json.NewDecoder(bytes.NewReader(b)))
+	_, err := checkDuplicate(json.NewDecoder(bytes.NewReader(b)))
 	if err != nil {
 		return err
 	}

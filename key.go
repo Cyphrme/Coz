@@ -108,7 +108,7 @@ func Thumbprint(c *Key) (tmb B64, err error) {
 
 // UnmarshalJSON always populates `tmb` even if it isn't given.
 func (c *Key) UnmarshalJSON(b []byte) error {
-	err := checkDuplicate(json.NewDecoder(bytes.NewReader(b)))
+	_, err := checkDuplicate(json.NewDecoder(bytes.NewReader(b)))
 	if err != nil {
 		return err
 	}

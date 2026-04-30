@@ -3,6 +3,7 @@ package coz
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -123,23 +124,23 @@ func ExamplePay_dig() {
 
 // ExamplePay_jsonUnmarshal tests round trip unmarshalling a Pay (with "custom"
 // type `msg`, which does not appear in Pay; there is no Pay.MSG).  Round trip
-// unmarshal, marshal, and unmarshal again.
+// unmarshal, marshal, and unmarshal again. Also tests order for type Pay (not
+// type Coz);  GoldenPay's order is `msg`, `alg`, `now`, `tmb`, `typ`.
 func ExamplePay_jsonUnmarshal() {
-	h := &Pay{}
-
-	err := json.Unmarshal([]byte(GoldenPay), h)
+	pay := &Pay{}
+	err := json.Unmarshal([]byte(GoldenPay), pay)
 	if err != nil {
 		panic(err)
 	}
 
-	marshaled, err := Marshal(h)
+	marshaled, err := json.Marshal(pay)
 	if err != nil {
 		panic(err)
 	}
 
 	// And one last round trip Unmarshal
 	roundTrip := &Pay{}
-	err = json.Unmarshal([]byte(GoldenPay), roundTrip)
+	err = json.Unmarshal(marshaled, roundTrip)
 	if err != nil {
 		panic(err)
 	}
@@ -147,8 +148,23 @@ func ExamplePay_jsonUnmarshal() {
 	fmt.Printf("%s\n", roundTrip)
 
 	// Output:
-	// {"alg":"ES256","now":1623132000,"tmb":"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg","typ":"cyphr.me/msg/create","msg":"Coz is a cryptographic JSON messaging specification."}
-	// {"alg":"ES256","now":1623132000,"tmb":"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg","typ":"cyphr.me/msg/create","msg":"Coz is a cryptographic JSON messaging specification."}
+	// {"msg":"Coz is a cryptographic JSON messaging specification.","alg":"ES256","now":1623132000,"tmb":"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg","typ":"cyphr.me/msg/create"}
+	// {"msg":"Coz is a cryptographic JSON messaging specification.","alg":"ES256","now":1623132000,"tmb":"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg","typ":"cyphr.me/msg/create"}
+}
+
+// ExamplePay_jsonUnmarshalCustomManual demonstrates "manually" unmarshalling,
+// that is calling package json.Unmarshal instead of the Coz helpers. This test
+// requires Pay.Struct to be properly populated from an json.Unmarshal.
+func ExamplePay_jsonUnmarshalCustomManual() {
+	var pay Pay
+	err := json.Unmarshal([]byte(GoldenPay), &pay)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(pay)
+
+	// Output:
+	// {"msg":"Coz is a cryptographic JSON messaging specification.","alg":"ES256","now":1623132000,"tmb":"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg","typ":"cyphr.me/msg/create"}
 }
 
 // ExamplePay_jsonMarshalCustom demonstrates marshalling Pay with a custom
@@ -172,21 +188,6 @@ func ExamplePay_jsonMarshalCustom() {
 		panic(err)
 	}
 	fmt.Println(string(s))
-
-	// Output:
-	// {"alg":"ES256","now":1623132000,"tmb":"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg","typ":"cyphr.me/msg/create","msg":"Coz is a cryptographic JSON messaging specification."}
-}
-
-// ExamplePay_jsonUnmarshalCustomManual demonstrates "manually" unmarshalling,
-// that is calling package json.Unmarshal instead of the Coz helpers. This test
-// requires Pay.Struct to be properly populated from an json.Unmarshal.
-func ExamplePay_jsonUnmarshalCustomManual() {
-	var pay Pay
-	err := json.Unmarshal([]byte(GoldenPay), &pay)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(pay)
 
 	// Output:
 	// {"alg":"ES256","now":1623132000,"tmb":"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg","typ":"cyphr.me/msg/create","msg":"Coz is a cryptographic JSON messaging specification."}
@@ -288,6 +289,7 @@ func ExampleCoz_String() {
 
 // TestPay_SignPayJSON_CustomFields tests that custom fields in a JSON payload
 // are preserved when SignPayJSON auto-updates the "now" field.
+// TODO I think we can test order on this as well.
 func TestPay_SignPayJSON_CustomFields(t *testing.T) {
 	// A JSON payload with an arbitrary custom field "custom_field".
 	payJSON := json.RawMessage([]byte(`{
@@ -544,24 +546,40 @@ func ExampleMarshal_jsonRawMessage() {
 	// {"obj":null}
 }
 
+func Example_checkDuplicateKeys() {
+
+	data := `{"a": "x", "b":"y", "c": {"z": 1, "zz": 2}}`
+	keys, err := checkDuplicate(json.NewDecoder(strings.NewReader(data)))
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println(keys)
+
+	// Output:
+	// [a b c]
+}
+
 func Test_checkDuplicate(t *testing.T) {
 	// Happy path; no duplicate.  Should not error.
-	data := `{"a": "b", "c":"d", "d": {"e": 1, "f": 2}}`
-	err := checkDuplicate(json.NewDecoder(strings.NewReader(data)))
+	data := `{"a": "x", "b":"y", "c": {"z": 1, "zz": 2}}`
+	keys, err := checkDuplicate(json.NewDecoder(strings.NewReader(data)))
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !slices.Equal(keys, []string{"a", "b", "c"}) {
+		t.Fatalf("Top level keys returned incorrectly. Got: %v", keys)
+	}
 
 	// Duplicate, should error.
-	data = `{"a": "aValue", "a":true,"c":["field_3 string 1","field3 string2"], "d": {"e": 1, "e": 2}}`
-	err = checkDuplicate(json.NewDecoder(strings.NewReader(data)))
+	data = `{"a": "aValue", "a":true,"c":["field_3 string 1","field3 string2"], "d": {"z": 1, "zz": 2}}`
+	_, err = checkDuplicate(json.NewDecoder(strings.NewReader(data)))
 	if err == nil {
 		t.Fatal("Should have found duplicate.")
 	}
 
 	// Recursive check with duplicate in inner struct.  Should error.
-	data = `{"a": "aValue", "c":"cValue", "d": {"e": 1, "e": 2}}`
-	err = checkDuplicate(json.NewDecoder(strings.NewReader(data)))
+	data = `{"a": "aValue", "b":"bValue", "c": {"z": 1, "z": 2}}`
+	_, err = checkDuplicate(json.NewDecoder(strings.NewReader(data)))
 	if err == nil {
 		t.Fatal("Recursive check should have found duplicate.")
 	}
