@@ -253,16 +253,30 @@ func (p *Pay) UnmarshalJSON(b []byte) (err error) {
 	if err != nil {
 		return err
 	}
-	p2.can = canon
 
-	var m map[string]json.RawMessage
-	if err := json.Unmarshal(b, &m); err == nil {
-		// Remove Pay Coz fields so only custom fields remain
-		for _, k := range []string{"alg", "now", "tmb", "typ", "rvk"} {
-			delete(m, k)
+	// If caller pre-set a typed struct, unmarshal custom fields into it.
+	// Struct tag order is canonical for typed structs, so don't set can.
+	// A map from a prior Case 2 unmarshal is not a caller-provided struct.
+	_, isMap := p.Struct.(map[string]json.RawMessage)
+	if p.Struct != nil && !isMap {
+		str := p.Struct
+		if err = json.Unmarshal(b, str); err != nil {
+			return err
 		}
-		if len(m) > 0 {
-			p2.Struct = m
+		p2.Struct = str
+	} else {
+		// No caller struct; capture unknown custom fields into a map.
+		// Preserve input JSON key order via can for correct remarshal.
+		p2.can = canon
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal(b, &m); err == nil {
+			// Remove Pay Coz fields so only custom fields remain
+			for _, k := range []string{"alg", "now", "tmb", "typ", "rvk"} {
+				delete(m, k)
+			}
+			if len(m) > 0 {
+				p2.Struct = m
+			}
 		}
 	}
 

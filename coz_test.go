@@ -328,6 +328,61 @@ func TestPay_SignPayJSON_CustomFields(t *testing.T) {
 	}
 }
 
+// TestPay_SignPayJSON_FieldOrder tests that SignPayJSON preserves the byte-level
+// field ordering of the input payload after the "now" auto-update.  Custom
+// fields are deliberately anti-alphabetical ("z_last" before "a_first") so that
+// any map-based remarshal will detectably reorder them.
+func TestPay_SignPayJSON_FieldOrder(t *testing.T) {
+	payJSON := json.RawMessage([]byte(`{
+		"alg": "ES256",
+		"now": 1000,
+		"tmb": "U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg",
+		"typ": "cyphr.me/test",
+		"z_last": "should appear first",
+		"a_first": "should appear second"
+	}`))
+
+	cz, err := GoldenKey.SignPayJSON(payJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify signature is valid.
+	valid, err := GoldenKey.VerifyCoz(cz)
+	if !valid || err != nil {
+		t.Fatalf("Coz failed to verify: %v", err)
+	}
+
+	out := string(cz.Pay)
+
+	// Verify both custom fields are present.
+	if !strings.Contains(out, `"z_last"`) {
+		t.Fatalf("z_last field dropped from payload: %s", out)
+	}
+	if !strings.Contains(out, `"a_first"`) {
+		t.Fatalf("a_first field dropped from payload: %s", out)
+	}
+
+	// Verify field ordering: "z_last" must appear before "a_first" in the
+	// output bytes, matching the input order.  If SignPayJSON round-trips
+	// through a map, Go's json.Marshal will alphabetize the keys and this
+	// assertion will fail.
+	zIdx := strings.Index(out, `"z_last"`)
+	aIdx := strings.Index(out, `"a_first"`)
+	if zIdx >= aIdx {
+		t.Errorf("SignPayJSON destroyed field order: z_last at byte %d, a_first at byte %d.\nPayload: %s", zIdx, aIdx, out)
+	}
+
+	// Verify "now" was updated (not the original seed value).
+	var payMap map[string]interface{}
+	if err := json.Unmarshal(cz.Pay, &payMap); err != nil {
+		t.Fatal(err)
+	}
+	if now, ok := payMap["now"].(float64); !ok || int64(now) <= 1000 {
+		t.Errorf("Now field was not updated correctly: %v", payMap["now"])
+	}
+}
+
 func ExampleCoz_Meta() {
 	cz := new(Coz)
 	err := json.Unmarshal([]byte(GoldenCoz), cz)

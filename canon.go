@@ -34,34 +34,22 @@ func Canonical(input []byte, canon any) (b []byte, err error) {
 
 	s, ok := canon.([]string)
 	if ok {
-		// The only datastructure that can unmarshal arbitrary JSON is map, but
-		// json.Marshal will unmarshal *all* elements and there is no way to specify
-		// unmarshalling to only the given fields.  Solution: unmarshal into new
-		// map, and transfer appropriate fields to a second map.
+		// Unmarshal into a map to get all values, then insert into orderedMap
+		// in canon order so that Marshal emits keys in the correct sequence.
 		m := make(map[string]any)
 		err = json.Unmarshal(input, &m)
 		if err != nil {
 			return nil, err
 		}
 
-		mm := make(map[string]any)
+		om := newOrderedMap()
 		for i := 0; i < len(s); i++ {
-			mm[s[i]] = m[s[i]]
+			if val, ok := m[s[i]]; ok {
+				om.Set(s[i], val)
+			}
 		}
 
-		return Marshal(mm)
-
-		// Alternatively:
-		// 		// Use orderedMap to preserve canon order
-		// // TODO write a test on this.
-		// om := newOrderedMap()
-		// for i := 0; i < len(s); i++ {
-		// 	if val, ok := m[s[i]]; ok {
-		// 		om.Set(s[i], val)
-		// 	}
-		// }
-
-		// return Marshal(om)
+		return Marshal(om)
 	}
 
 	// Unmarshal the given bytes into the given canonical format.
