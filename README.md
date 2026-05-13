@@ -428,25 +428,26 @@ See [`docs/development.md`](docs/development.md) for the development guide.
 
 
 ## Coz Core and Coz X
-The sections above are defined as the main Coz specification, Coz core. There
-are no plans to increase Coz's scope or features in core other than additional
-algorithm support. This will be especially true after Coz is out of Alpha/Beta.
-(At the moment, we would like more time for feedback before casting the
-specification into stone.)
+The main Coz specification is "Coz core".
 
-Coz X (Coz extended) includes additional documentation, extra features,
-drafts, proposals, early new algorithms support that's not yet adopted in Coz
-core, and extended algorithm support.
+"[Coz X][CozX]", Coz eXtended, includes discussion on new or extended algorithm
+support, additional documentation, extra features, and draft proposals not yet
+adopted in Coz core. Such discussions, including git issues, belong in that
+repository.  See [Coz_go_x/normal][Normal] for an example of a Coz X feature not
+included in Coz core.
 
-See [Coz_go_x/normal][Normal] for an example of a Coz X feature not included in
-Coz core.
+There are no plans to substantively increase Coz core's scope or features other
+than additional algorithm support.  We are also considering some form of
+encryption and generic key derivation support, but if ever implemented such
+features will preserve and extend, not rewrite, the existing structure of Coz.
+
 
 Repository structure:
 
 - [Coz][Coz] Main specification, Go reference implementation, and Go Coz core implementation.
 - [CozRust][CozRust] Rust core implementation.
 - [CozJS][CozeJS] Javascript core implementation.
-- [CozX][CozeX] Coz extended. Additional documents, discussion, and new algorithms (Not a code repository).
+- [CozX][CozX] Coz extended. Additional documents, discussion, and new algorithms (Not a code repository).
 - [CozGoX][CozeGoX] Go implementation of extended features.
 - [CozJSX][CozeJSX] Javascript implementation of extended.
 - etc...
@@ -632,7 +633,7 @@ difference. `alg` permits Coz implementations to support a subset of features
 while remaining Coz compliant. The specification hopes to stay simple and
 stable enough to preclude versioning, however we suspect further tweaks are
 probably warranted, so a long alpha and beta time is planned. Extension to Coz
-are defined by [CozX][Cozex] so implementations avoid feature bloat.
+are defined by [CozX][CozX] so implementations avoid feature bloat.
 Implementation releases themselves are versioned.
 
 
@@ -1037,7 +1038,7 @@ reserved Cypherpunk, LLC and may not be used without permission.
 [Coz]: https://github.com/Cyphrme/Coz
 [CozRust]: https://github.com/Cyphrme/coz-rust
 [CozeCLI]: https://github.com/Cyphrme/CozeCLI
-[CozeX]: https://github.com/Cyphrme/CozeX
+[CozX]: https://github.com/Cyphrme/CozX
 [CozeGoX]: https://github.com/Cyphrme/CozeGoX
 [CozeJS]: https://github.com/Cyphrme/CozeJS
 [CozeJSX]: https://github.com/Cyphrme/CozeJS
