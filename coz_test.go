@@ -563,7 +563,7 @@ func ExampleMarshal_jsonRawMessage() {
 	fmt.Printf("%s\n", b)
 
 	// Output:
-	// json: error calling MarshalJSON for type *json.RawMessage: unexpected end of JSON input
+	// json: error calling MarshalJSON for type *jsontext.Value: unexpected end of JSON input
 	// []
 	// {"obj":""}
 	// {"obj":null}
@@ -781,6 +781,6 @@ func ExampleTimestamp_marshal() {
 
 	// Output:
 	// {"now":1623132000,"rvk":9007199254740991}
-	// json: error calling MarshalJSON for type coz.Timestamp: coz.Timestamp: value given 9007199254740992 is invalid. Must be between 0 and 9007199254740991 inclusive
-	// json: error calling MarshalJSON for type coz.Timestamp: coz.Timestamp: value given -1 is invalid. Must be between 0 and 9007199254740991 inclusive
+	// json: error calling MarshalJSON for type *coz.Timestamp: coz.Timestamp: value given 9007199254740992 is invalid. Must be between 0 and 9007199254740991 inclusive
+	// json: error calling MarshalJSON for type *coz.Timestamp: coz.Timestamp: value given -1 is invalid. Must be between 0 and 9007199254740991 inclusive
 }

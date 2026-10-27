@@ -127,8 +127,8 @@ func ExampleB64_non_strict_decode() {
 	// [U+007B U+0022 U+0042 U+0022 U+003A U+0022 U+0068 U+004F U+006B U+0022 U+007D]
 	// [U+007B U+0022 U+0042 U+0022 U+003A U+0022 U+0068 U+004F U+006B U+000A U+0022 U+007D]
 	// [U+007B U+0022 U+0042 U+0022 U+003A U+0022 U+0068 U+004F U+006B U+000D U+0022 U+007D]
-	// invalid character '\n' in string literal
-	// invalid character '\r' in string literal
+	// invalid character '\n' in string
+	// invalid character '\r' in string
 }
 
 // FuzzCastB64ToString ensures that casting to and from B64 and string does not

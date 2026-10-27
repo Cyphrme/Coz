@@ -97,7 +97,7 @@ func (c *Key) Thumbprint() (err error) {
 // set and be a valid length.  On error, tmb is set to nil.
 func Thumbprint(c *Key) (tmb B64, err error) {
 	if len(c.Pub) != c.Alg.PubSize() {
-		return nil, fmt.Errorf("Thumbprint: incorrect pub length for alg %q; expected %q; given %q", c.Alg, c.Alg.Hash().Size(), len(tmb))
+		return nil, fmt.Errorf("Thumbprint: incorrect pub length for alg %q; expected %d; given %d", c.Alg, c.Alg.PubSize(), len(c.Pub))
 	}
 	b, err := Marshal(c)
 	if err != nil {
@@ -135,7 +135,7 @@ func (c *Key) UnmarshalJSON(b []byte) error {
 // and/or VerifyCoz if needing Coz validation.
 func (c *Key) Sign(digest B64) (sig B64, err error) {
 	if len(c.Prv) != c.Alg.PrvSize() {
-		return nil, fmt.Errorf("Sign: incorrect prv length for alg %q; expected %q, given %q", c.Alg, c.Alg.PrvSize(), len(c.Prv))
+		return nil, fmt.Errorf("Sign: incorrect prv length for alg %q; expected %d, given %d", c.Alg, c.Alg.PrvSize(), len(c.Prv))
 	}
 
 	switch c.Alg.SigAlg().Genus() {
@@ -419,7 +419,7 @@ func (c *Key) Correct() (err error) {
 	// Calculate tmb from pub and compare with given value.
 	if len(c.Pub) != 0 {
 		if len(c.Pub) != c.Alg.PubSize() {
-			return fmt.Errorf("Correct: incorrect pub length for alg %q; expected %q, given %q", c.Alg, c.Alg.PubSize(), len(c.Pub))
+			return fmt.Errorf("Correct: incorrect pub length for alg %q; expected %d, given %d", c.Alg, c.Alg.PubSize(), len(c.Pub))
 		}
 		givenTmb := c.Tmb
 		err := c.Thumbprint()
@@ -434,7 +434,7 @@ func (c *Key) Correct() (err error) {
 	// tmb only key.  (Coz assumes `pub` is calculable from `prv`, so at this point
 	// `tmb` should always be set. See `checksum_and_seed.md` for exposition.
 	if len(c.Tmb) != c.Alg.Hash().Size() {
-		return fmt.Errorf("Correct: incorrect tmb length for alg %q; expected %q, given %q", c.Alg, c.Alg.Hash().Size(), len(c.Tmb))
+		return fmt.Errorf("Correct: incorrect tmb length for alg %q; expected %d, given %d", c.Alg, c.Alg.Hash().Size(), len(c.Tmb))
 	}
 	return nil
 }
