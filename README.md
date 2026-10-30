@@ -357,9 +357,10 @@ methods are outside the scope of Coz.
 `alg` specifies a parameter set and is a single source of truth for Coz
 cryptographic operations.
 
-Instead of a registry, supported algorithms and their exact parameters are
-defined in the reference implementation (Go). Implementations must match these
-parameters for interoperability and correctness.
+Supported algorithms and their parameters are defined in the normative [Coz
+Algorithm Registry](registry.md). Implementations must match these parameters
+for interoperability and correctness. For implementation guidance consult the
+reference implementation (Go).
 
 For key algorithms, Coz assumes a **Deterministic Public-from-Private
 Derivability** property: `pub` can be deterministically derived from `prv` and
@@ -385,16 +386,6 @@ never use the character `:`.
 - Curve: P-256
 - SigSize: 64
 - SigSizeB64: 86
-
-### Supported Algorithms
-
-- ES224
-- ES256
-- ES384
-- ES512
-- Ed25519
-- Ed25519ph
-- ES256k
 
 ---
 ## End of Coz Specification
