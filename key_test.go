@@ -526,9 +526,10 @@ func ExampleCoz_verifyRevoke() {
     "now": 1623132000,
     "rvk": 1623132000,
     "tmb": "U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg",
+    "pub": "2nTOaFVm2QLxmUO_SjgyscVHBtvHEfo2rq65MvgNRjORojq39Haq9rXNxvXxwba_Xj0F5vZibJR3isBdOWbo5g",
     "typ": "cyphr.me/key/revoke"
   },
-  "sig": "EhAsIL_w51NbCtzxFUcJiRMb1KmlxFSD-g7M-9wgqH9nnVHaEHiNyecfvfkrNf--KnfZyrsDIyWuT86MLNozQg"
+  "sig": "X7MazsPsPvAeaaZ1A_Zi_pN4Tppfq12q9zSN4OCHs0drYvWuAkKT7c092Y8FCtRmXxt3WyG66Om5jduoULC9fQ"
 }`)
 
 	coz := new(Coz)
