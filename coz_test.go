@@ -122,6 +122,27 @@ func ExamplePay_dig() {
 	// {"pay":{"alg":"ES256","tmb":"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg","typ":"cyphr.me/file","dig":"YBG8cU5hkhPdyEJDhRB0Qk90NZuU0B34dnMQbkFMtBI"}}
 }
 
+// ExampleParseDigest parses a bare digest, a labeled digest, and a "coz:"
+// digest. A bare value returns an empty alg; fill it from pay.alg.
+func ExampleParseDigest() {
+	for _, s := range []string{
+		GoldenTmb,
+		"SHA-256:oDBDAg4xplHQby6iQ2lZMS1Jz4Op0bNoD5LK3KxEUZo",
+		"coz:ES256:" + GoldenTmb,
+	} {
+		alg, dig, err := ParseDigest(s)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Printf("%q %s %s\n", alg, alg.Hash(), dig)
+	}
+
+	// Output:
+	// "" UnknownHshAlg U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg
+	// "SHA-256" SHA-256 oDBDAg4xplHQby6iQ2lZMS1Jz4Op0bNoD5LK3KxEUZo
+	// "ES256" SHA-256 U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg
+}
+
 // ExamplePay_jsonUnmarshal tests round trip unmarshalling a Pay (with "custom"
 // type `msg`, which does not appear in Pay; there is no Pay.MSG).  Round trip
 // unmarshal, marshal, and unmarshal again. Also tests order for type Pay (not
@@ -285,6 +306,63 @@ func ExampleCoz_String() {
 
 	// Output:
 	// {"pay":{"msg":"Coz is a cryptographic JSON messaging specification.","alg":"ES256","now":1623132000,"tmb":"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg","typ":"cyphr.me/msg/create"},"sig":"OJ4_timgp-wxpLF3hllrbe55wdjhzGOLgRYsGO1BmIMYbo4VKAdgZHnYyIU907ZTJkVr8B81A2K8U4nQA6ONEg"}
+}
+
+// TestParseDigest checks rejected digest serializations.
+func TestParseDigest(t *testing.T) {
+	for _, s := range []string{ // All are expected to fail.
+		"",            // A missing value is not a digest.
+		"coz:ES256",   // The "coz:" prefix still needs both an alg and a digest.
+		"SHA-512:",    // Labeled form with the digest omitted.
+		"nope:AAAA",   // The label is not a Coz alg. AAAA is valid b64ut, so this rejects the alg.
+		"SHA-256:!!!", // The alg is known, and the digest is not b64ut.
+	} {
+		if _, _, err := ParseDigest(s); err == nil {
+			t.Errorf("ParseDigest(%q) accepted an invalid digest", s)
+		}
+	}
+}
+
+// TestPay_digestLabel signs a bare digest and a labeled digest in pay. Both
+// values must survive unchanged. Signing does not interpret the label.
+func TestPay_digestLabel(t *testing.T) {
+	// ES256's hash is SHA-256, so an aligned digest is bare b64ut.
+	bare, err := Hash(SHA256, []byte("aligned with ES256"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// SHA-512 does not match ES256, so the value names its own algorithm.
+	sha512Dig, err := Hash(SHA512, []byte("not aligned with ES256"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	labeled := "SHA-512:" + sha512Dig.String()
+
+	// Sign both as ordinary JSON strings. Coz does not parse the label.
+	payJSON := fmt.Sprintf(
+		`{"alg":"ES256","dig":"%s","id":"%s","tmb":"%s"}`,
+		bare, labeled, GoldenKey.Tmb,
+	)
+	coz, err := GoldenKey.SignPayJSON(json.RawMessage(payJSON))
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid, err := GoldenKey.VerifyCoz(coz)
+	if !valid || err != nil {
+		t.Fatalf("Coz failed to verify: %v", err)
+	}
+
+	// Verification must leave both application fields unchanged.
+	var payMap map[string]any
+	if err := json.Unmarshal(coz.Pay, &payMap); err != nil {
+		t.Fatal(err)
+	}
+	if payMap["dig"] != bare.String() {
+		t.Errorf("bare dig changed: %v", payMap["dig"])
+	}
+	if payMap["id"] != labeled {
+		t.Errorf("labeled digest changed: %v", payMap["id"])
+	}
 }
 
 // TestPay_SignPayJSON_CustomFields tests that custom fields in a JSON payload

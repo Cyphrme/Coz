@@ -9,6 +9,7 @@ but should not be considered apart of the Coz specification API.
   - [ToLowS]
   - [Marshal]
   - [MarshalPretty]
+  - [ParseDigest]
 
 Other auxiliary types and functions, like [B64], are reasonable exports for
 package coz, especially since compatible implementations are absent from the Go
@@ -23,6 +24,7 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/sha3"
@@ -403,6 +405,43 @@ func Hash(h HshAlg, msg []byte) (digest B64, err error) {
 		return nil, fmt.Errorf("Hash: digest is empty; given HshAlg %q", h)
 	}
 	return digest, nil
+}
+
+// ParseDigest parses a digest serialized as bare b64ut or as "<alg>:<b64ut>".
+// An optional "coz:" prefix is accepted, as in "coz:ES256:<b64ut>".
+//
+// A bare digest returns an empty alg. Inside pay, the caller uses pay.alg for
+// that value. The returned alg is the label itself: "ES256" is not rewritten
+// to "SHA-256". Use [Alg.Hash] for the hash that label implies.
+func ParseDigest(s string) (alg Alg, digest B64, err error) {
+	if s == "" {
+		return "", nil, fmt.Errorf("ParseDigest: empty digest")
+	}
+
+	label, b64, labeled := strings.Cut(s, ":")
+	if labeled && label == "coz" {
+		label, b64, labeled = strings.Cut(b64, ":")
+	}
+	if !labeled {
+		digest, err = Decode(s)
+		if err != nil || len(digest) == 0 {
+			return "", nil, fmt.Errorf("ParseDigest: invalid digest %q", s)
+		}
+		return "", digest, nil
+	}
+	if label == "" || b64 == "" {
+		return "", nil, fmt.Errorf("ParseDigest: invalid labeled digest %q", s)
+	}
+
+	alg = Parse(label)
+	if alg == UnknownAlg {
+		return "", nil, fmt.Errorf("ParseDigest: unknown alg %q", label)
+	}
+	digest, err = Decode(b64)
+	if err != nil || len(digest) == 0 {
+		return "", nil, fmt.Errorf("ParseDigest: invalid digest %q", b64)
+	}
+	return alg, digest, nil
 }
 
 // IsRevoke returns true if the given Key is marked as revoked.
