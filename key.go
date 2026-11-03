@@ -40,7 +40,7 @@ type Key struct {
 	Pub B64       `json:"pub,omitempty"`
 }
 
-// String implements Stringer. Returns empty on error.
+// String implements [fmt.Stringer]. Returns empty on error.
 func (c Key) String() string {
 	b, err := Marshal(c)
 	if err != nil {
@@ -487,7 +487,7 @@ func (c *Key) calcPub() B64 {
 	}
 }
 
-// ToPubEcdsa converts a Coz Key to ecdsa.PublicKey.
+// ToPubEcdsa converts a Coz Key to [ecdsa.PublicKey].
 func (c *Key) ToPubEcdsa() (key *ecdsa.PublicKey) {
 	size := c.Alg.PubSize() / 2
 	return &ecdsa.PublicKey{

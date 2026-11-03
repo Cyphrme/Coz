@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// B64 is a Coz wrapper for encoding/base64. B64 is useful for marshaling and
+// B64 is a Coz wrapper for [encoding/base64]. B64 is useful for marshaling and
 // unmarshalling structs. B64's underlying type is []byte and is represented in
 // JSON as "RFC 4648 base 64 URI canonical with padding truncated" (b64ut).
 //
@@ -14,7 +14,7 @@ import (
 // zero is encoded as "AA".
 type B64 []byte
 
-// UnmarshalJSON implements json.Unmarshaler.
+// UnmarshalJSON implements [json.Unmarshaler].
 func (t *B64) UnmarshalJSON(b []byte) error {
 	// JSON.Unmarshal returns b encapsulated in quotes which is invalid base64 characters.
 	s, err := base64.URLEncoding.Strict().WithPadding(base64.NoPadding).DecodeString(strings.Trim(string(b), "\""))
@@ -25,17 +25,17 @@ func (t *B64) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// MarshalJSON implements json.Marshaler. Error is always nil.
+// MarshalJSON implements [json.Marshaler]. Error is always nil.
 func (t B64) MarshalJSON() ([]byte, error) {
 	return []byte(fmt.Sprintf("\"%v\"", t)), nil
 }
 
-// String implements fmt.Stringer. Use with `%s`, `%v`, `%+v`.
+// String implements [fmt.Stringer]. Use with `%s`, `%v`, `%+v`.
 func (t B64) String() string {
 	return base64.URLEncoding.Strict().WithPadding(base64.NoPadding).EncodeToString([]byte(t))
 }
 
-// GoString implements fmt.GoStringer. Use with `%#v` (not %s or %+v).
+// GoString implements [fmt.GoStringer]. Use with `%#v` (not %s or %+v).
 func (t B64) GoString() string {
 	return base64.URLEncoding.Strict().WithPadding(base64.NoPadding).EncodeToString([]byte(t))
 }
@@ -72,12 +72,12 @@ func MustDecode(b64 string) B64 {
 // implement this on their own, they may forget to have this enforcement.
 type B64s string
 
-// String implements fmt.Stringer
+// String implements [fmt.Stringer]
 func (b B64s) String() string {
 	return B64(b).String()
 }
 
-// GoString implements fmt.GoString
+// GoString implements [fmt.GoStringer]
 func (b B64s) GoString() string {
 	return b.String()
 }

@@ -22,7 +22,7 @@ func Canon(raw json.RawMessage) (can []string, err error) {
 // If canon is nil, input JSON is only compactified.
 //
 // Interface "canon" may be `[]string`, `struct“, or `nil`.  If "canon" is a
-// struct or slice it must be properly ordered.  If canon is nil, json.Unmarshal
+// struct or slice it must be properly ordered.  If canon is nil, [json.Unmarshal]
 // will place the input into a UTF-8 ordered map.
 //
 // In the Go version of Coz, the canonical form of a struct is (currently)

@@ -1,16 +1,16 @@
 /*
-Package coz, see the README at https://github.com/Cyphrme/Coze
+Package coz, see the README at https://github.com/Cyphrme/Coz
 
 This library exports some functions that may be helpful for other applications,
 but should not be considered apart of the Coz specification API.
 
-  - ECDSAToLowSSig
-  - IsLowS
-  - ToLowS
-  - Marshal
-  - MarshalPretty
+  - [ECDSAToLowSSig]
+  - [IsLowS]
+  - [ToLowS]
+  - [Marshal]
+  - [MarshalPretty]
 
-Other auxiliary types and functions, like B64, are reasonable exports for
+Other auxiliary types and functions, like [B64], are reasonable exports for
 package coz, especially since compatible implementations are absent from the Go
 standard library.
 */
@@ -53,7 +53,7 @@ type Coz struct {
 	Parsed *Pay `json:"-"`
 }
 
-// String implements fmt.Stringer.  Without this method `pay` prints as bytes.
+// String implements [fmt.Stringer].  Without this method `pay` prints as bytes.
 // On error, returns the error as a string.
 func (cz Coz) String() string {
 	b, err := Marshal(cz)
@@ -128,7 +128,7 @@ func (cz *Coz) MetaWithAlg(alg SEAlg) (err error) {
 }
 
 // UnmarshalJSON unmarshals checks for duplicates and unmarshals `coz`.
-// See notes on Pay.UnmarshalJSON.
+// See notes on [Pay.UnmarshalJSON].
 func (cz *Coz) UnmarshalJSON(b []byte) error {
 	_, err := checkDuplicate(json.NewDecoder(bytes.NewReader(b)))
 	if err != nil {
@@ -202,7 +202,7 @@ func (p *Pay) Coz() (coz *Coz, err error) {
 	return coz, err
 }
 
-// String implements fmt.Stringer.
+// String implements [fmt.Stringer].
 // On error, returns the error as a string.
 func (p Pay) String() string {
 	b, err := p.MarshalJSON()
@@ -292,7 +292,7 @@ func (p *Pay) UnmarshalJSON(b []byte) (err error) {
 
 // PadInts creates a big-endian byte slice with given size that is the left
 // padded concatenation of two input integers. Parameter `size` must be even.
-// From Go's packages, X, Y, R, and S are type big.Int of varying size. Before
+// From Go's packages, X, Y, R, and S are type [big.Int] of varying size. Before
 // encoding to fixed size string, left padding of bytes is needed.
 //
 // Algorithm notes: EdDSA is little-endian while ECDSA is big-endian. EdDSA
@@ -322,21 +322,21 @@ func PadInts(r, s *big.Int, size int) (out B64) {
 	return out
 }
 
-// Marshaler is a UTF-8 marshaller for Go structs. Go's `json.Marshal`
-// removes the valid characters "&". "<", ">". See note on Marshal.  (Note that
+// Marshaler is a UTF-8 marshaller for Go structs. Go's [json.Marshal]
+// removes the valid characters "&". "<", ">". See note on [Marshal].  (Note that
 // Marshaler follows the Go "-er" convention for interfaces while marshaller is
 // spelled with two l's)
 type Marshaler interface {
 	CozMarshal() ([]byte, error)
 }
 
-// Marshal is a JSON friendly marshaller.  json.Marshal preemptively replaces
+// Marshal is a JSON friendly marshaller.  [json.Marshal] preemptively replaces
 // the valid JSON and UTF-8 characters "&". "<", ">" with the "slash u" unicode
 // escapes (e.g. \u0026) in the name of HTML friendliness, for example:
 // https://play.golang.org/p/o2hiX0c62oN. As JSON is not HTML, preemptive HTML
 // escaping is incorrect.  (The JSON spec calls for no such measures and other
 // industry encoders do no such preemptive escaping.)  Where JSON may include
-// these legitimate characters, like sanitized arbitrary user data, json.Marshal
+// these legitimate characters, like sanitized arbitrary user data, [json.Marshal]
 // should not be used. The Go team is aware that the existing implementation has
 // this and other concerns but has not yet released a new version.  Joe Tsai is
 // working on fixes in a yet-to-be-released Tailscale's "JSONv2" package, which
@@ -345,7 +345,7 @@ type Marshaler interface {
 // enumerates other JSON best practices that may be of concern for anyone
 // concerned with the aforementioned issue.
 // https://github.com/go-json-experiment/json#behavior-changes.  See
-// https://github.com/Cyphrme/Coze/issues/15 for other JSON encoding concerns.
+// https://github.com/Cyphrme/Coz/issues/15 for other JSON encoding concerns.
 //
 // Go structs already require unique fields, so unlike coz.UnmarshalJSON or
 // pay.UnmarshalJSON, marshaling will not sanitize for duplicates.
@@ -488,11 +488,11 @@ func checkDuplicate(d *json.Decoder) (topLevelObjectKeys []string, e error) {
 // that use IEEE 754 double-precision floats for numbers couldn't just be like
 // Unix and use int64.
 //
-// Timestamp is exported for external libraries. Go's Time.time is overqualified
+// Timestamp is exported for external libraries. Go's [time.Time] is overqualified
 // for Coz's use, and type int64 isn't specific to "positive UTC Unix Timestamp
 // with max value 2^53 -1".  (Also note that int64 is signed, not just positive.)
 //
-// This library assumes that the json.Unmarshal interface is extended by this
+// This library assumes that the [json.Unmarshaler] interface is extended by this
 // library, for Timestamp and Pay, and will error on timestamps that do not meet
 // the specification requirements, so no error is needed specifically on this
 // type.
@@ -521,7 +521,7 @@ func (t Timestamp) Valid() error {
 	return nil
 }
 
-// MarshalJSON implements json.Marshaler with range validation.
+// MarshalJSON implements [json.Marshaler] with range validation.
 func (t Timestamp) MarshalJSON() ([]byte, error) {
 	if err := t.Valid(); err != nil {
 		return nil, err
@@ -529,7 +529,7 @@ func (t Timestamp) MarshalJSON() ([]byte, error) {
 	return json.Marshal(int64(t))
 }
 
-// UnmarshalJSON implements json.Unmarshaler with range validation.
+// UnmarshalJSON implements [json.Unmarshaler] with range validation.
 func (t *Timestamp) UnmarshalJSON(data []byte) error {
 	var i int64
 	if err := json.Unmarshal(data, &i); err != nil {
@@ -544,12 +544,12 @@ func (t *Timestamp) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// String implements fmt.Strings so it prints the number cleanly, without needing casts.
+// String implements [fmt.Stringer] so it prints the number cleanly, without needing casts.
 func (t Timestamp) String() string {
 	return strconv.FormatInt(int64(t), 10)
 }
 
-// Time returns a time.Time
+// Time returns a [time.Time].
 func (t Timestamp) Time() time.Time {
 	return time.Unix(int64(t), 0).UTC()
 }

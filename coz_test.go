@@ -153,8 +153,8 @@ func ExamplePay_jsonUnmarshal() {
 }
 
 // ExamplePay_jsonUnmarshalCustomManual demonstrates "manually" unmarshalling,
-// that is calling package json.Unmarshal instead of the Coz helpers. This test
-// requires Pay.Struct to be properly populated from an json.Unmarshal.
+// that is calling [json.Unmarshal] instead of the Coz helpers. This test
+// requires [Pay.Struct] to be properly populated from [json.Unmarshal].
 func ExamplePay_jsonUnmarshalCustomManual() {
 	var pay Pay
 	err := json.Unmarshal([]byte(GoldenPay), &pay)
@@ -211,7 +211,7 @@ func ExamplePay_jsonUnmarshalCustom() {
 	// &{Coz is a cryptographic JSON messaging specification.}
 }
 
-// ExamplePay_String_custom demonstrates fmt.Stringer on Pay with a custom
+// ExamplePay_String_custom demonstrates [fmt.Stringer] on [Pay] with a custom
 // structure.
 func ExamplePay_String_custom() {
 	customStruct := CustomStruct{
@@ -528,7 +528,7 @@ func ExampleCoz_jsonMarshalPretty() {
 }
 
 // ExampleMarshal_jsonRawMessage demonstrates using empty string, two quote
-// characters, and nil for json.RawMessage.  When using json.RawMessage, it
+// characters, and nil for [json.RawMessage].  When using [json.RawMessage], it
 // should always be valid JSON or nil or otherwise it will result in an error.
 func ExampleMarshal_jsonRawMessage() {
 	o := json.RawMessage([]byte("")) // empty string

@@ -71,10 +71,12 @@ golangci-lint run
 ## Go Doc
 
 ```
-godoc -http=:6060
+go doc -http
 ```
 
-http://localhost:6060/pkg/github.com/cyphrme/coz/
+`go doc -http` serves HTML docs for the package in the current directory and
+opens a browser. The port is chosen when the server starts. `go doc` prints
+the same docs in the terminal.
 
 
 ## Visualizer

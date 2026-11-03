@@ -70,7 +70,7 @@ func ExampleB64_unmarshalJSON() {
 }
 
 // Demonstrates that Coz Go will error on non-canonical base 64 encoding.  See
-// https://github.com/Cyphrme/Coze/issues/18. The last three characters of
+// https://github.com/Cyphrme/Coz/issues/18. The last three characters of
 // example `tmb` is `hOk`, but `hOl` also decodes to the same byte value (in
 // Hex, `84E9`) even though they are different UTF-8 values. Tool for decoding
 // [hOk](https://convert.zamicol.com/#?inAlph=base64&in=hOk&outAlph=Hex) and

@@ -449,9 +449,9 @@ func ParseHashAlg(s string) HshAlg {
 	return HshAlg(Parse(s))
 }
 
-// goHash returns a Go hash.Hash from the hashing algo.
+// goHash returns a Go [hash.Hash] from the hashing algo.
 //
-// SHAKE does not satisfy Go's hash.Hash and uses sha3.SkakeHash.
+// SHAKE does not satisfy Go's [hash.Hash] and uses [sha3.ShakeHash].
 func (h *HshAlg) goHash() hash.Hash {
 	switch *h {
 	default:
@@ -594,8 +594,8 @@ func (c *Crv) Parse(s string) {
 	}
 }
 
-// Curve returns Go's elliptic.Curve for the given crv.  Returns nil if there is
-// no matching  `elliptic.Curve`.
+// Curve returns Go's [elliptic.Curve] for the given crv.  Returns nil if there is
+// no matching [elliptic.Curve].
 func (c Crv) EllipticCurve() elliptic.Curve {
 	switch c {
 	default:
