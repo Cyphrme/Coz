@@ -30,10 +30,27 @@ This registry defines the normative parameters for each `alg` in Coz.
 | SHAKE128 | SHA3  | SHA    | hsh | 32       | 43          |
 | SHAKE256 | SHA3  | SHA    | hsh | 64       | 86          |
 
-## Notes
+### Notes
 
 - Sizes are in bytes. B64 columns are b64ut and sizes are `ceil(4*n/3)`.
 - Hex size is simply double of the byte size.  Omitted from the tables for
   brevity.
 - Variable length hashes, like SHAKE128/SHAKE256, have defined fixed defaults;
   both permit arbitrary output length.
+
+## Verification Requirements
+External algorithm specifications sometimes leave verification criteria
+underspecified or optional. This section defines the tighter rules required for
+Coz.
+
+### ECDSA
+- Reject signatures where \(S > n/2\) (low-S required).
+- Reject \(R = 0\), \(S = 0\), or values \(\ge n\).
+- Reject public keys that are not on the curve or are the point at infinity.
+
+### EdDSA
+- For `Ed25519` and `Ed25519ph`, use \([8]R = [8]([s]B - [k]A)\).
+- For `Ed448`, use \([4]R = [4]([s]B - [k]A)\).
+- Reject \(S \ge L\).
+- Accept non-canonical point encodings and low-order points for both \(A\) and \(R\).
+- Accept \(S = 0\).

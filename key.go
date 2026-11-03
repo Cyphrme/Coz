@@ -10,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+
+	"github.com/hdevalence/ed25519consensus"
 )
 
 // KeyCanon is the canonical form of a Coz key.
@@ -318,7 +320,10 @@ func (c *Key) Verify(digest, sig B64) (valid bool) {
 
 		return ecdsa.Verify(c.ToPubEcdsa(), digest, r, s)
 	case Ed25519, Ed25519ph:
-		return ed25519.Verify(ed25519.PublicKey(c.Pub), digest, sig)
+		// ZIP-215, as required by registry.md: [8]R = [8]([S]B - [k]A),
+		// reject S >= L, and accept non-canonical and low-order points.
+		// crypto/ed25519.Verify checks the cofactorless equation instead.
+		return ed25519consensus.Verify(ed25519.PublicKey(c.Pub), digest, sig)
 	}
 }
 

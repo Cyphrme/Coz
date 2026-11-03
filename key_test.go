@@ -613,8 +613,8 @@ func Test_lowS(t *testing.T) {
 	}
 }
 
-// Test_ed25519Malleability demonstrates that the Go Ed25519 implementation
-// is not malleable.  The malleable form was generated using
+// Test_ed25519Malleability checks rejection of S >= L and demonstrates that the
+// implementation is not malleable. The malleable form was generated using
 // https://slowli.github.io/ed25519-quirks/malleability.
 func Test_ed25519Malleability(t *testing.T) {
 	msg := []byte("Hello, world!")
@@ -634,17 +634,46 @@ func Test_ed25519Malleability(t *testing.T) {
 	if !ok {
 		return
 	}
+	k := &Key{Alg: SEAlg(Ed25519), Pub: B64(pub)}
 
 	// ub64p: WA8oFP3rnGa/Fbcei89ztetTEJ921iOLgPlUbww2ZbyHq3pYD/ZN5mpUC7iBXMJdzM7zV1nbi0TSzbFpAk4ACA==
-	valid := ed25519.Verify(pub, msg, MustDecode("WA8oFP3rnGa_Fbcei89ztetTEJ921iOLgPlUbww2ZbyHq3pYD_ZN5mpUC7iBXMJdzM7zV1nbi0TSzbFpAk4ACA"))
-	if !valid {
-		t.Errorf("Example valid b64ut canonical (non-malleable) signature is not valid.")
+	canonical := MustDecode("WA8oFP3rnGa_Fbcei89ztetTEJ921iOLgPlUbww2ZbyHq3pYD_ZN5mpUC7iBXMJdzM7zV1nbi0TSzbFpAk4ACA")
+	if !ed25519.Verify(pub, msg, canonical) || !k.Verify(msg, canonical) {
+		t.Errorf("canonical signature was rejected")
 	}
 
-	// Alternative, malleable form.
-	valid = ed25519.Verify(pub, msg, MustDecode("WA8oFP3rnGa_Fbcei89ztetTEJ921iOLgPlUbww2Zbx0f3C1KVlgPkHxAltgVqFyzM7zV1nbi0TSzbFpAk4AGA"))
-	if valid {
-		t.Errorf("Example invalid b64ut non-canonical (non-malleable) signature is not valid.")
+	// Alternative, malleable form. S is outside [0, L).
+	malleable := MustDecode("WA8oFP3rnGa_Fbcei89ztetTEJ921iOLgPlUbww2Zbx0f3C1KVlgPkHxAltgVqFyzM7zV1nbi0TSzbFpAk4AGA")
+	if ed25519.Verify(pub, msg, malleable) || k.Verify(msg, malleable) {
+		t.Errorf("malleable signature with S >= L was accepted")
+	}
+}
+
+// Test_ed25519LowOrder checks that a low-order signature is accepted.
+// A is the identity and R is the order-2 point (0, -1), with S = 0.
+// [8]R = [8]([S]B - [k]A) holds because both points have order dividing 8.
+// crypto/ed25519.Verify checks [S]B = R + [k]A and rejects this signature.
+func Test_ed25519LowOrder(t *testing.T) {
+	identity := make([]byte, 32)
+	identity[0] = 1
+	order2 := []byte{
+		0xec, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f,
+	}
+	sig := make([]byte, 64)
+	copy(sig[:32], order2)
+	msg := []byte("coze")
+
+	if ed25519.Verify(identity, msg, sig) {
+		t.Fatal("crypto/ed25519 accepted a low-order signature")
+	}
+	for _, alg := range []SigAlg{Ed25519, Ed25519ph} {
+		k := &Key{Alg: SEAlg(alg), Pub: B64(identity)}
+		if !k.Verify(msg, B64(sig)) {
+			t.Errorf("%s rejected a low-order signature", alg)
+		}
 	}
 }
 
