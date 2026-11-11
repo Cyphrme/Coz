@@ -6,7 +6,8 @@ import (
 	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
-	"encoding/json"
+	"encoding/json/jsontext"
+	json "encoding/json/v2"
 	"errors"
 	"fmt"
 	"math/big"
@@ -110,16 +111,11 @@ func Thumbprint(c *Key) (tmb B64, err error) {
 
 // UnmarshalJSON always populates `tmb` even if it isn't given.
 func (c *Key) UnmarshalJSON(b []byte) error {
-	_, err := checkJSON(b)
-	if err != nil {
-		return err
-	}
-
 	type key2 Key // Break infinite unmarshal loop
 	czk2 := new(key2)
-	err = json.Unmarshal(b, czk2)
+	err := json.Unmarshal(b, czk2)
 	if err != nil {
-		return err
+		return jsonErr(err)
 	}
 
 	*c = *(*Key)(czk2)
@@ -215,11 +211,11 @@ func (c *Key) SignPayRaw(p *Pay) (coz *Coz, err error) {
 // SignPayJSON signs a json `coz.pay`. If the JSON contains a non-zero `now`
 // field, it is updated to the current Unix timestamp before signing. See
 // documentation on SignPay.
-func (c *Key) SignPayJSON(pay json.RawMessage) (coz *Coz, err error) {
+func (c *Key) SignPayJSON(pay jsontext.Value) (coz *Coz, err error) {
 	p := new(Pay)
 	err = json.Unmarshal(pay, p)
 	if err != nil {
-		return nil, err
+		return nil, jsonErr(err)
 	}
 	// Auto-update now if present (non-zero).
 	if p.Now != 0 {
@@ -247,7 +243,7 @@ func (c *Key) SignPayJSON(pay json.RawMessage) (coz *Coz, err error) {
 // signPayJSON efficiently consolidates common code between SignPay and
 // SignPayJSON. Parameter p must be given and b is optional.  If b is nil, b is
 // generated from p. If b is not nil b is compacted.
-func (c *Key) signPayJSON(p *Pay, b json.RawMessage) (coz *Coz, err error) {
+func (c *Key) signPayJSON(p *Pay, b jsontext.Value) (coz *Coz, err error) {
 	if p.Alg != "" && c.Alg != p.Alg {
 		return nil, fmt.Errorf("SignPay: key alg %q and coz alg %q do not match", c.Alg, p.Alg)
 	}
@@ -337,7 +333,7 @@ func (c *Key) VerifyCoz(cz *Coz) (bool, error) {
 	p := new(Pay)
 	err := json.Unmarshal(cz.Pay, p)
 	if err != nil {
-		return false, err
+		return false, jsonErr(err)
 	}
 	if p.Alg != "" && c.Alg != p.Alg {
 		return false, fmt.Errorf("VerifyCoz: key.alg %q and coz.alg %q do not match", c.Alg, p.Alg)
