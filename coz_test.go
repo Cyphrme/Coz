@@ -647,10 +647,10 @@ func ExampleMarshal_jsonRawMessage() {
 	// {"obj":null}
 }
 
-func Example_checkDuplicateKeys() {
+func Example_checkJSON() {
 
 	data := `{"a": "x", "b":"y", "c": {"z": 1, "zz": 2}}`
-	keys, err := checkDuplicate(json.NewDecoder(strings.NewReader(data)))
+	keys, err := checkJSON([]byte(data))
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -660,10 +660,10 @@ func Example_checkDuplicateKeys() {
 	// [a b c]
 }
 
-func Test_checkDuplicate(t *testing.T) {
+func Test_checkJSON(t *testing.T) {
 	// Happy path; no duplicate.  Should not error.
 	data := `{"a": "x", "b":"y", "c": {"z": 1, "zz": 2}}`
-	keys, err := checkDuplicate(json.NewDecoder(strings.NewReader(data)))
+	keys, err := checkJSON([]byte(data))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -673,14 +673,14 @@ func Test_checkDuplicate(t *testing.T) {
 
 	// Duplicate, should error.
 	data = `{"a": "aValue", "a":true,"c":["field_3 string 1","field3 string2"], "d": {"z": 1, "zz": 2}}`
-	_, err = checkDuplicate(json.NewDecoder(strings.NewReader(data)))
+	_, err = checkJSON([]byte(data))
 	if err == nil {
 		t.Fatal("Should have found duplicate.")
 	}
 
 	// Recursive check with duplicate in inner struct.  Should error.
 	data = `{"a": "aValue", "b":"bValue", "c": {"z": 1, "z": 2}}`
-	_, err = checkDuplicate(json.NewDecoder(strings.NewReader(data)))
+	_, err = checkJSON([]byte(data))
 	if err == nil {
 		t.Fatal("Recursive check should have found duplicate.")
 	}

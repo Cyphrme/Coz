@@ -1,21 +1,28 @@
 package coz
 
 import (
-	"bytes"
-	"encoding/json"
+	"encoding/json/jsontext"
+	json "encoding/json/v2"
+	"errors"
+	"slices"
 )
 
 // Canon returns the current canon from raw JSON.
 //
 // It returns only top level fields with no recursion or promotion of embedded
-// fields.
-func Canon(raw json.RawMessage) (can []string, err error) {
-	o := newOrderedMap()
-	err = json.Unmarshal(raw, &o)
+// fields. Errors if raw is not a JSON object.
+func Canon(raw jsontext.Value) (can []string, err error) {
+	can, err = checkJSON(raw)
 	if err != nil {
 		return nil, err
 	}
-	return o.Keys(), nil
+	if raw.Kind() != '{' {
+		return nil, errors.New("Canon: JSON value is not an object")
+	}
+	if can == nil {
+		can = []string{}
+	}
+	return can, nil
 }
 
 // Canonical returns the canonical form. Input canon is optional and may be nil.
@@ -34,31 +41,52 @@ func Canonical(input []byte, canon any) (b []byte, err error) {
 
 	s, ok := canon.([]string)
 	if ok {
-		// Unmarshal into a map to get all values, then insert into orderedMap
-		// in canon order so that Marshal emits keys in the correct sequence.
-		m := make(map[string]any)
+		// Unmarshal into a map to get all values, then marshal in canon order.
+		// Values are kept as given, other than whitespace.
+		m := make(map[string]jsontext.Value)
 		err = json.Unmarshal(input, &m)
 		if err != nil {
-			return nil, err
+			return nil, jsonErr(err)
 		}
 
-		om := newOrderedMap()
-		for i := 0; i < len(s); i++ {
-			if val, ok := m[s[i]]; ok {
-				om.Set(s[i], val)
+		o := orderedObject{m: m}
+		for _, k := range s {
+			if _, ok := m[k]; ok && !slices.Contains(o.keys, k) {
+				o.keys = append(o.keys, k)
 			}
 		}
-
-		return Marshal(om)
+		return Marshal(o)
 	}
 
 	// Unmarshal the given bytes into the given canonical format.
 	err = json.Unmarshal(input, &canon)
 	if err != nil {
-		return nil, err
+		return nil, jsonErr(err)
 	}
 
 	return Marshal(canon)
+}
+
+// orderedObject marshals m as a JSON object in the order of keys.
+type orderedObject struct {
+	keys []string
+	m    map[string]jsontext.Value
+}
+
+// MarshalJSONTo implements [json.MarshalerTo].
+func (o orderedObject) MarshalJSONTo(enc *jsontext.Encoder) error {
+	if err := enc.WriteToken(jsontext.BeginObject); err != nil {
+		return err
+	}
+	for _, k := range o.keys {
+		if err := enc.WriteToken(jsontext.String(k)); err != nil {
+			return err
+		}
+		if err := json.MarshalEncode(enc, o.m[k]); err != nil {
+			return err
+		}
+	}
+	return enc.WriteToken(jsontext.EndObject)
 }
 
 // CanonicalHash accepts []byte and optional canon and returns digest.
@@ -72,12 +100,13 @@ func CanonicalHash(input []byte, canon any, hash HshAlg) (digest B64, err error)
 	return Hash(hash, input)
 }
 
-// Compact is a helper that compactifies JSON.
-func compact(msg json.RawMessage) ([]byte, error) {
-	var b bytes.Buffer
-	err := json.Compact(&b, msg)
+// Compact is a helper that compactifies JSON. Errors on duplicates and invalid
+// UTF-8.
+func compact(msg jsontext.Value) ([]byte, error) {
+	v := slices.Clone(msg)
+	err := v.Compact(jsontext.AllowDuplicateNames(false), jsontext.AllowInvalidUTF8(false))
 	if err != nil {
-		return nil, err
+		return nil, jsonErr(err)
 	}
-	return b.Bytes(), nil
+	return v, nil
 }

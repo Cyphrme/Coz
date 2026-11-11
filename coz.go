@@ -19,10 +19,14 @@ package coz
 
 import (
 	"bytes"
-	"encoding/json"
+	jsonv1 "encoding/json"
+	"encoding/json/jsontext"
+	json "encoding/json/v2"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -45,12 +49,12 @@ import (
 //	Parsed: The standard Coz pay fields ["alg","now","tmb","typ"] parsed
 //	  from `Pay`.  `Parsed` is populated by Meta() and is JSON ignored.
 type Coz struct {
-	Pay json.RawMessage `json:"pay,omitempty"`
-	Key *Key            `json:"key,omitempty"`
-	Can []string        `json:"can,omitempty"`
-	Cad B64             `json:"cad,omitempty"`
-	Sig B64             `json:"sig,omitempty"`
-	Czd B64             `json:"czd,omitempty"`
+	Pay jsontext.Value `json:"pay,omitempty"`
+	Key *Key           `json:"key,omitempty"`
+	Can []string       `json:"can,omitempty"`
+	Cad B64            `json:"cad,omitempty"`
+	Sig B64            `json:"sig,omitempty"`
+	Czd B64            `json:"czd,omitempty"`
 
 	Parsed *Pay `json:"-"`
 }
@@ -101,7 +105,7 @@ func (cz *Coz) MetaWithAlg(alg SEAlg) (err error) {
 	// Set Parsed from Pay.
 	err = json.Unmarshal(cz.Pay, cz.Parsed)
 	if err != nil {
-		return err
+		return jsonErr(err)
 	}
 	if alg == "" {
 		alg = cz.Parsed.Alg
@@ -129,23 +133,18 @@ func (cz *Coz) MetaWithAlg(alg SEAlg) (err error) {
 	return nil
 }
 
-// UnmarshalJSON unmarshals checks for duplicates and unmarshals `coz`.
+// UnmarshalJSON unmarshals `coz`. Errors on duplicates and invalid UTF-8.
 // See notes on [Pay.UnmarshalJSON].
 func (cz *Coz) UnmarshalJSON(b []byte) error {
-	_, err := checkDuplicate(json.NewDecoder(bytes.NewReader(b)))
-	if err != nil {
-		return err
-	}
-
 	type coz2 Coz // Break infinite unmarshal loop
 	cz2 := new(coz2)
 	// Set perviously set Coz values except Pay, which is populated from
 	// json.Unmarshal.
 	cz2.Parsed = cz.Parsed
 	cz2.Key = cz.Key
-	err = json.Unmarshal(b, cz2)
+	err := json.Unmarshal(b, cz2)
 	if err != nil {
-		return err
+		return jsonErr(err)
 	}
 	*cz = *(*Coz)(cz2)
 	return nil
@@ -227,13 +226,19 @@ func (p *Pay) MarshalJSON() ([]byte, error) {
 		return pay, nil
 	}
 
-	s, err := json.Marshal(p.Struct)
+	s, err := Marshal(p.Struct)
 	if err != nil {
 		return nil, err
 	}
-	// Concatenate the two:
-	s[0] = ',' // Change from "{" to ","
-	bytes := append(pay[:len(pay)-1], s...)
+	if len(s) < 2 || s[0] != '{' {
+		return nil, fmt.Errorf("Pay.MarshalJSON: Struct must marshal to a JSON object; given %s", s)
+	}
+	// Concatenate the two, without a comma if either object is empty:
+	bytes := pay[:len(pay)-1] // Remove "}"
+	if len(pay) > 2 && len(s) > 2 {
+		bytes = append(bytes, ',')
+	}
+	bytes = append(bytes, s[1:]...) // Remove "{"
 
 	if p.can != nil {
 		return Canonical(bytes, p.can)
@@ -241,11 +246,10 @@ func (p *Pay) MarshalJSON() ([]byte, error) {
 	return bytes, nil
 }
 
-// UnmarshalJSON unmarshals both Pay and if given custom Pay.Struct. Throws an
-// error on duplicate. (Duplicate related, see
-// https://github.com/golang/go/issues/48298)
+// UnmarshalJSON unmarshals both Pay and if given custom Pay.Struct. Errors on
+// duplicates and invalid UTF-8.
 func (p *Pay) UnmarshalJSON(b []byte) (err error) {
-	canon, err := checkDuplicate(json.NewDecoder(bytes.NewReader(b)))
+	canon, err := checkJSON(b)
 	if err != nil {
 		return err
 	}
@@ -254,24 +258,24 @@ func (p *Pay) UnmarshalJSON(b []byte) (err error) {
 	p2 := new(pay2)
 	err = json.Unmarshal(b, p2)
 	if err != nil {
-		return err
+		return jsonErr(err)
 	}
 
 	// If caller pre-set a typed struct, unmarshal custom fields into it.
 	// Struct tag order is canonical for typed structs, so don't set can.
 	// A map from a prior, Case 2, unmarshal is not a caller-provided struct.
-	_, isMap := p.Struct.(map[string]json.RawMessage)
+	_, isMap := p.Struct.(map[string]jsontext.Value)
 	if p.Struct != nil && !isMap {
 		str := p.Struct
 		if err = json.Unmarshal(b, str); err != nil {
-			return err
+			return jsonErr(err)
 		}
 		p2.Struct = str
 	} else {
 		// No caller struct; capture unknown custom fields into a map.
 		// Preserve input JSON key order via can for correct remarshal.
 		p2.can = canon
-		var m map[string]json.RawMessage
+		var m map[string]jsontext.Value
 		if err := json.Unmarshal(b, &m); err == nil {
 			// Remove Pay Coz fields so only custom fields remain
 			for _, k := range []string{"alg", "now", "tmb", "typ", "rvk"} {
@@ -324,56 +328,38 @@ func PadInts(r, s *big.Int, size int) (out B64) {
 	return out
 }
 
-// Marshaler is a UTF-8 marshaller for Go structs. Go's [json.Marshal]
-// removes the valid characters "&". "<", ">". See note on [Marshal].  (Note that
-// Marshaler follows the Go "-er" convention for interfaces while marshaller is
-// spelled with two l's)
+// Marshaler is a UTF-8 marshaller for Go structs. See note on [Marshal].  (Note
+// that Marshaler follows the Go "-er" convention for interfaces while
+// marshaller is spelled with two l's)
 type Marshaler interface {
 	CozMarshal() ([]byte, error)
 }
 
-// Marshal is a JSON friendly marshaller.  [json.Marshal] preemptively replaces
-// the valid JSON and UTF-8 characters "&". "<", ">" with the "slash u" unicode
-// escapes (e.g. \u0026) in the name of HTML friendliness, for example:
-// https://play.golang.org/p/o2hiX0c62oN. As JSON is not HTML, preemptive HTML
-// escaping is incorrect.  (The JSON spec calls for no such measures and other
-// industry encoders do no such preemptive escaping.)  Where JSON may include
-// these legitimate characters, like sanitized arbitrary user data, [json.Marshal]
-// should not be used. The Go team is aware that the existing implementation has
-// this and other concerns but has not yet released a new version.  Joe Tsai is
-// working on fixes in a yet-to-be-released Tailscale's "JSONv2" package, which
-// we hope to use upon release.
-// https://pkg.go.dev/github.com/go-json-experiment/json.  The package also
-// enumerates other JSON best practices that may be of concern for anyone
-// concerned with the aforementioned issue.
-// https://github.com/go-json-experiment/json#behavior-changes.  See
-// https://github.com/Cyphrme/Coz/issues/15 for other JSON encoding concerns.
-//
-// Go structs already require unique fields, so unlike coz.UnmarshalJSON or
-// pay.UnmarshalJSON, marshaling will not sanitize for duplicates.
+// marshalOptions are the [encoding/json/v2] options for Marshal. Coz requires
+// valid UTF-8, no duplicate names, and no HTML escaping. Otherwise,
+// [jsonv1.DefaultOptionsV1] keeps output identical to encoding/json (v1), e.g.
+// sorted map keys, escaped U+2028 and U+2029, `omitempty`, and nil as null.
+var marshalOptions = json.JoinOptions(
+	jsonv1.DefaultOptionsV1(),
+	jsontext.AllowDuplicateNames(false),
+	jsontext.AllowInvalidUTF8(false),
+	jsontext.EscapeForHTML(false),
+)
+
+// Marshal is a JSON friendly marshaller.  Unlike [jsonv1.Marshal], Marshal
+// does not escape the valid JSON and UTF-8 characters "&". "<", ">" (e.g.
+// \u0026) in the name of HTML friendliness. As JSON is not HTML, preemptive
+// HTML escaping is incorrect.  Marshal errors on invalid UTF-8 and duplicate
+// names.  See https://github.com/Cyphrme/Coz/issues/15 for other JSON
+// encoding concerns.
 func Marshal(i any) ([]byte, error) {
-	buffer := &bytes.Buffer{}
-	encoder := json.NewEncoder(buffer)
-	encoder.SetEscapeHTML(false)
-	err := encoder.Encode(i)
-	if err != nil {
-		return nil, err
-	}
-	return bytes.TrimRight(buffer.Bytes(), "\n"), nil
+	return json.Marshal(i, marshalOptions)
 }
 
 // MarshalPretty uses 4 spaces for each level. Spaces are used instead of tabs
 // because some applications display tabs as 8 spaces, which is excessive.
 func MarshalPretty(i any) ([]byte, error) {
-	buffer := &bytes.Buffer{}
-	encoder := json.NewEncoder(buffer)
-	encoder.SetIndent("", "    ")
-	encoder.SetEscapeHTML(false)
-	err := encoder.Encode(i)
-	if err != nil {
-		return nil, err
-	}
-	return bytes.TrimRight(buffer.Bytes(), "\n"), nil
+	return json.Marshal(i, marshalOptions, jsontext.WithIndent("    "))
 }
 
 // Hash hashes msg and returns the digest. Returns nil on error. Errors on
@@ -462,64 +448,53 @@ func isRevoke(rvk Timestamp) bool {
 // ErrJSONDuplicate allows applications to check for JSON duplicate error.
 type ErrJSONDuplicate error
 
-// checkDuplicate checks for JSON duplicates and if not duplicated returns the
-// top level unique keys. See notes on Marshal and the README FAQ on duplicates.
-func checkDuplicate(d *json.Decoder) (topLevelObjectKeys []string, e error) {
-	t, err := d.Token()
-	if err != nil {
-		return nil, err
-	}
-
-	// Is it a delimiter?
-	delim, ok := t.(json.Delim)
-	if !ok {
-		return nil, nil // scaler type, nothing to do
-	}
-
-	switch delim {
-	case '{':
-		keysBool := make(map[string]bool)
-		var keys []string // preserves order
-
-		for d.More() {
-			t, err := d.Token()
+// checkJSON checks that b is a single JSON value with valid UTF-8 and no
+// duplicate names at any depth. If b is an object, checkJSON returns its top
+// level names in order. See notes on Marshal and the README FAQ on duplicates.
+func checkJSON(b []byte) (topLevelNames []string, err error) {
+	d := jsontext.NewDecoder(bytes.NewReader(b))
+	if d.PeekKind() == '{' {
+		if _, err = d.ReadToken(); err != nil {
+			return nil, jsonErr(err)
+		}
+		for d.PeekKind() == '"' {
+			t, err := d.ReadToken()
 			if err != nil {
-				return nil, err
+				return nil, jsonErr(err)
 			}
-
-			key := t.(string)
-			if keysBool[key] {
-				return nil, ErrJSONDuplicate(fmt.Errorf("Coz: JSON duplicate field %q", key))
-			}
-
-			keysBool[key] = true
-			keys = append(keys, key)
-
-			// Recursive, Check value in case value is object.
-			if _, err = checkDuplicate(d); err != nil {
-				return nil, err
+			topLevelNames = append(topLevelNames, t.String())
+			if err = d.SkipValue(); err != nil {
+				return nil, jsonErr(err)
 			}
 		}
-
-		// consume trailing }
-		if _, err := d.Token(); err != nil {
-			return nil, err
+		if _, err = d.ReadToken(); err != nil { // consume trailing }
+			return nil, jsonErr(err)
 		}
-
-		return keys, nil
-
-	case '[':
-		for d.More() {
-			if _, err := checkDuplicate(d); err != nil {
-				return nil, err
-			}
-		}
-		// consume trailing ]
-		if _, err := d.Token(); err != nil {
-			return nil, err
-		}
+	} else if err = d.SkipValue(); err != nil {
+		return nil, jsonErr(err)
 	}
-	return nil, nil
+	if _, err = d.ReadToken(); err != io.EOF {
+		if err == nil {
+			err = errors.New("Coz: invalid data after top-level value")
+		}
+		return nil, jsonErr(err)
+	}
+	return topLevelNames, nil
+}
+
+// jsonErr converts a JSON duplicate name error into [ErrJSONDuplicate]. As
+// with encoding/json (v1), errors from UnmarshalJSON methods are not wrapped.
+func jsonErr(err error) error {
+	var se *jsontext.SyntacticError
+	if errors.As(err, &se) && errors.Is(se.Err, jsontext.ErrDuplicateName) {
+		return ErrJSONDuplicate(fmt.Errorf("Coz: JSON duplicate field %q", se.JSONPointer.LastToken()))
+	}
+	var me *json.SemanticError
+	if errors.As(err, &me) && me.Err != nil && me.GoType != nil &&
+		reflect.PointerTo(me.GoType).Implements(reflect.TypeFor[json.Unmarshaler]()) {
+		return jsonErr(me.Err)
+	}
+	return err
 }
 
 // Timestamp is positive UTC Unix time in seconds with a max value of 2^53 - 1.
@@ -571,7 +546,7 @@ func (t Timestamp) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON implements [json.Unmarshaler] with range validation.
 func (t *Timestamp) UnmarshalJSON(data []byte) error {
 	var i int64
-	if err := json.Unmarshal(data, &i); err != nil {
+	if err := jsonv1.Unmarshal(data, &i); err != nil { // v1 for stable error text
 		return fmt.Errorf("coz.Timestamp.UnmarshalJSON: %w", err)
 	}
 
