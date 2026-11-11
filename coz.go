@@ -230,9 +230,15 @@ func (p *Pay) MarshalJSON() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Concatenate the two:
-	s[0] = ',' // Change from "{" to ","
-	bytes := append(pay[:len(pay)-1], s...)
+	if len(s) < 2 || s[0] != '{' {
+		return nil, fmt.Errorf("Pay.MarshalJSON: Struct must marshal to a JSON object; given %s", s)
+	}
+	// Concatenate the two, without a comma if either object is empty:
+	bytes := pay[:len(pay)-1] // Remove "}"
+	if len(pay) > 2 && len(s) > 2 {
+		bytes = append(bytes, ',')
+	}
+	bytes = append(bytes, s[1:]...) // Remove "{"
 
 	if p.can != nil {
 		return Canonical(bytes, p.can)

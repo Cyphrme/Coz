@@ -365,6 +365,40 @@ func TestCanonNotObject(t *testing.T) {
 	}
 }
 
+// TestPayMarshalStruct tests Pay with an empty Pay or an empty Struct.
+func TestPayMarshalStruct(t *testing.T) {
+	for in, want := range map[string]string{
+		`{"a":1}`:               `{"a":1}`,
+		`{"a":1,"alg":"ES256"}`: `{"a":1,"alg":"ES256"}`,
+		`{"alg":"ES256"}`:       `{"alg":"ES256"}`,
+		`{}`:                    `{}`,
+	} {
+		p := new(Pay)
+		if err := json.Unmarshal([]byte(in), p); err != nil {
+			t.Fatal(err)
+		}
+		b, err := Marshal(p)
+		if err != nil || string(b) != want {
+			t.Errorf("%s: got %s, %v, want %s", in, b, err, want)
+		}
+	}
+	for _, s := range []any{map[string]any{}, &struct{}{}} {
+		b, err := Marshal(&Pay{Alg: SEAlg(ES256), Struct: s})
+		if err != nil || string(b) != `{"alg":"ES256"}` {
+			t.Errorf("%T: got %s, %v", s, b, err)
+		}
+		b, err = Marshal(&Pay{Struct: s})
+		if err != nil || string(b) != `{}` {
+			t.Errorf("%T: got %s, %v", s, b, err)
+		}
+	}
+	for _, s := range []any{(*CustomStruct)(nil), []int{1}, map[string]any{"alg": "ES384"}} {
+		if b, err := Marshal(&Pay{Alg: SEAlg(ES256), Struct: s}); err == nil {
+			t.Errorf("%T: should error, got %s", s, b)
+		}
+	}
+}
+
 // jsonGolden was generated from the encoding/json (v1) implementation.
 var jsonGolden = map[string]string{
 	"Marshal all runes":              "ae6d9cc0986cec05302180c9d6f278e9cab5b54998db9d37f50ad867d6897081",
