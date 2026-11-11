@@ -299,7 +299,11 @@ func TestJSONHTML(t *testing.T) {
 			t.Errorf("%s: got %s, want %s", name, b, want)
 		}
 	}
-	b, err := MarshalPretty(p)
+	b, err := Marshal(&Pay{Struct: &CustomStruct{Msg: "<&>"}})
+	if err != nil || string(b) != `{"msg":"<&>"}` {
+		t.Errorf("Marshal Pay.Struct: got %s, %v", b, err)
+	}
+	b, err = MarshalPretty(p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -411,7 +415,7 @@ var jsonGolden = map[string]string{
 	"MarshalPretty GoldenKey":        "{\n    \"alg\": \"ES256\",\n    \"prv\": \"bNstg4_H3m3SlROufwRSEgibLrBuRq9114OvdapcpVA\",\n    \"now\": 1623132000,\n    \"tag\": \"Zami's Majuscule Key.\",\n    \"tmb\": \"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg\",\n    \"pub\": \"2nTOaFVm2QLxmUO_SjgyscVHBtvHEfo2rq65MvgNRjORojq39Haq9rXNxvXxwba_Xj0F5vZibJR3isBdOWbo5g\"\n}",
 	"Marshal Params":                 "{\"Name\":\"ES256\",\"Genus\":\"ECDSA\",\"Family\":\"EC\",\"Use\":\"sig\",\"Hash\":\"SHA-256\",\"HashSize\":32,\"HashSizeB64\":43,\"PubSize\":64,\"PubSizeB64\":86,\"PrvSize\":32,\"PrvSizeB64\":43,\"Curve\":\"P-256\",\"SigSize\":64,\"SigSizeB64\":86}",
 	"Marshal Pay":                    "{\"alg\":\"ES256\",\"now\":1623132000,\"tmb\":\"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg\",\"typ\":\"<&>\",\"rvk\":1}",
-	"Marshal Pay with typed Struct":  "{\"alg\":\"ES256\",\"S\":\"\\u003c\\u0026\\u003e\\u2028\",\"Z\":0,\"NS\":null,\"NM\":null,\"B\":null}",
+	"Marshal Pay with typed Struct":  "{\"alg\":\"ES256\",\"S\":\"<&>\\u2028\",\"Z\":0,\"NS\":null,\"NM\":null,\"B\":null}",
 	"Marshal Pay with map Struct":    "{\"alg\":\"ES256\",\"a\":\"x\",\"z\":1}",
 	"Marshal Pay round trip":         "{\"z\":1,\"alg\":\"ES256\",\"a\":\"<&>\",\"now\":1,\"m\":{\"a\":2,\"b\":1}}",
 	"Marshal Coz":                    "{\"pay\":{\"msg\":\"Coz is a cryptographic JSON messaging specification.\",\"alg\":\"ES256\",\"now\":1623132000,\"tmb\":\"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg\",\"typ\":\"cyphr.me/msg/create\"},\"key\":{\"alg\":\"ES256\",\"prv\":\"bNstg4_H3m3SlROufwRSEgibLrBuRq9114OvdapcpVA\",\"now\":1623132000,\"tag\":\"Zami's Majuscule Key.\",\"tmb\":\"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg\",\"pub\":\"2nTOaFVm2QLxmUO_SjgyscVHBtvHEfo2rq65MvgNRjORojq39Haq9rXNxvXxwba_Xj0F5vZibJR3isBdOWbo5g\"},\"sig\":\"OJ4_timgp-wxpLF3hllrbe55wdjhzGOLgRYsGO1BmIMYbo4VKAdgZHnYyIU907ZTJkVr8B81A2K8U4nQA6ONEg\"}",

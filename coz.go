@@ -226,7 +226,7 @@ func (p *Pay) MarshalJSON() ([]byte, error) {
 		return pay, nil
 	}
 
-	s, err := jsonv1.Marshal(p.Struct)
+	s, err := Marshal(p.Struct)
 	if err != nil {
 		return nil, err
 	}
