@@ -1,10 +1,13 @@
 package coz
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"slices"
+	"strings"
 	"testing"
 	"unicode/utf8"
 )
@@ -172,6 +175,192 @@ func TestJSONGolden(t *testing.T) {
 		}
 		if string(b) != jsonGolden[c.name] {
 			t.Errorf("%s:\n got: %q\nwant: %q", c.name, b, jsonGolden[c.name])
+		}
+	}
+}
+
+// TestJSONStrict tests that duplicates, invalid UTF-8, and trailing data
+// error for every JSON input.
+func TestJSONStrict(t *testing.T) {
+	inputs := []struct {
+		name, json, err string
+	}{
+		{"duplicate", `{"alg":"ES256","alg":"ES384"}`, `Coz: JSON duplicate field "alg"`},
+		{"duplicate escaped", `{"alg":"ES256","\u0061lg":"ES384"}`, `Coz: JSON duplicate field "alg"`},
+		{"duplicate nested", `{"a":{"b":1,"b":2}}`, `Coz: JSON duplicate field "b"`},
+		{"duplicate in array", `{"a":[1,{"b":1,"b":2}]}`, `Coz: JSON duplicate field "b"`},
+		{"invalid UTF-8 value", "{\"a\":\"\xff\"}", "invalid UTF-8"},
+		{"invalid UTF-8 name", "{\"\xff\":1}", "invalid UTF-8"},
+		{"lone surrogate", `{"a":"\ud800"}`, "invalid surrogate pair"},
+		{"reversed surrogates", `{"a":"\udc00\ud800"}`, "invalid surrogate pair"},
+		{"trailing data", `{"a":1} {"b":2}`, "after top-level value"},
+	}
+	funcs := []struct {
+		name string
+		f    func([]byte) error
+	}{
+		{"json.Unmarshal Pay", func(b []byte) error { return json.Unmarshal(b, new(Pay)) }},
+		{"json.Unmarshal typed Pay", func(b []byte) error { return json.Unmarshal(b, &Pay{Struct: &CustomStruct{}}) }},
+		{"json.Unmarshal Key", func(b []byte) error { return json.Unmarshal(b, new(Key)) }},
+		{"json.Unmarshal Coz", func(b []byte) error { return json.Unmarshal(b, new(Coz)) }},
+		{"json.Unmarshal Coz pay", func(b []byte) error {
+			return json.Unmarshal(slices.Concat([]byte(`{"pay":`), b, []byte(`}`)), new(Coz))
+		}},
+		{"Canon", func(b []byte) error { _, err := Canon(b); return err }},
+		{"Canonical nil", func(b []byte) error { _, err := Canonical(b, nil); return err }},
+		{"Canonical canon", func(b []byte) error { _, err := Canonical(b, []string{"a"}); return err }},
+		{"Canonical struct", func(b []byte) error { _, err := Canonical(b, &CustomStruct{}); return err }},
+		{"Meta", func(b []byte) error { return (&Coz{Pay: b, Sig: MustDecode(GoldenSig)}).Meta() }},
+		{"SignPayJSON", func(b []byte) error { _, err := GoldenKey.SignPayJSON(b); return err }},
+		{"VerifyCoz", func(b []byte) error {
+			_, err := GoldenKey.VerifyCoz(&Coz{Pay: b, Sig: MustDecode(GoldenSig)})
+			return err
+		}},
+	}
+	for _, in := range inputs {
+		for _, f := range funcs {
+			if f.name == "json.Unmarshal Coz pay" && in.name == "trailing data" {
+				continue // Not trailing data inside of a coz.
+			}
+			err := f.f([]byte(in.json))
+			if err == nil || !strings.Contains(err.Error(), in.err) {
+				t.Errorf("%s: %s: want error containing %q, got: %v", f.name, in.name, in.err, err)
+			}
+		}
+	}
+
+	// Marshal errors on invalid UTF-8 instead of replacing it with U+FFFD.
+	if _, err := Marshal("a\xffb"); err == nil {
+		t.Error("Marshal: invalid UTF-8 should error")
+	}
+	if _, err := Marshal(Pay{Typ: "a\xffb"}); err == nil {
+		t.Error("Marshal Pay: invalid UTF-8 should error")
+	}
+}
+
+// TestJSONCaseSensitive tests that field names are case-sensitive, so that a
+// name like "ALG" or "Alg" cannot be parsed as "alg".
+func TestJSONCaseSensitive(t *testing.T) {
+	for in, alg := range map[string]SEAlg{
+		`{"alg":"ES256","ALG":"ES384"}`: SEAlg(ES256),
+		`{"ALG":"ES384","alg":"ES256"}`: SEAlg(ES256),
+		`{"Alg":"ES256"}`:               "",
+	} {
+		p := new(Pay)
+		if err := json.Unmarshal([]byte(in), p); err != nil {
+			t.Fatal(err)
+		}
+		if p.Alg != alg {
+			t.Errorf("%s: got alg %q, want %q", in, p.Alg, alg)
+		}
+		cz := new(Coz)
+		if err := json.Unmarshal([]byte(`{"pay":`+in+`,"sig":"AA"}`), cz); err != nil {
+			t.Fatal(err)
+		}
+		err := cz.Meta()
+		if alg == "" && err == nil {
+			t.Errorf("%s: Meta without alg should error", in)
+		}
+		if alg != "" && (err != nil || cz.Parsed.Alg != alg) {
+			t.Errorf("%s: Meta got alg %q, err %v, want %q", in, cz.Parsed.Alg, err, alg)
+		}
+	}
+	cz := new(Coz)
+	if err := json.Unmarshal([]byte(`{"Pay":{"alg":"ES256"},"SIG":"AA"}`), cz); err != nil {
+		t.Fatal(err)
+	}
+	if cz.Pay != nil || cz.Sig != nil {
+		t.Errorf("Coz fields should be case-sensitive, got: %s", cz)
+	}
+}
+
+// TestJSONHTML tests that "<", ">", and "&" are not escaped and that there is
+// no trailing newline.
+func TestJSONHTML(t *testing.T) {
+	want := `{"alg":"ES256","typ":"<&>"}`
+	p := &Pay{Alg: SEAlg(ES256), Typ: "<&>"}
+	for name, f := range map[string]func() ([]byte, error){
+		"Marshal":         func() ([]byte, error) { return Marshal(p) },
+		"Pay.MarshalJSON": p.MarshalJSON,
+		"Canonical nil":   func() ([]byte, error) { return Canonical([]byte(want), nil) },
+		"Canonical canon": func() ([]byte, error) { return Canonical([]byte(want), []string{"alg", "typ"}) },
+		"Canonical struct": func() ([]byte, error) {
+			return Canonical([]byte(want), &struct {
+				Alg string `json:"alg"`
+				Typ string `json:"typ"`
+			}{})
+		},
+	} {
+		b, err := f()
+		if err != nil {
+			t.Fatal(name, err)
+		}
+		if string(b) != want {
+			t.Errorf("%s: got %s, want %s", name, b, want)
+		}
+	}
+	b, err := MarshalPretty(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(b, []byte(`"<&>"`)) || bytes.HasSuffix(b, []byte("\n")) {
+		t.Errorf("MarshalPretty: got %q", b)
+	}
+}
+
+// TestJSONOrder tests that field order is preserved.
+func TestJSONOrder(t *testing.T) {
+	in := []byte(`{"z":1,"alg":"ES256","a":{"y":1,"b":2},"m":[3,1],"now":1}`)
+	want := []string{"z", "alg", "a", "m", "now"}
+	can, err := Canon(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(can, want) {
+		t.Errorf("Canon: got %q, want %q", can, want)
+	}
+
+	p := new(Pay)
+	if err = json.Unmarshal(in, p); err != nil {
+		t.Fatal(err)
+	}
+	b, err := Marshal(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if can, _ = Canon(b); !slices.Equal(can, want) {
+		t.Errorf("Pay round trip: got %q, want %q", can, want)
+	}
+
+	b, err = Canonical(in, []string{"now", "missing", "z", "now"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != `{"now":1,"z":1}` {
+		t.Errorf("Canonical: got %s", b)
+	}
+
+	cz := &Coz{Pay: in, Sig: MustDecode(GoldenSig)}
+	if err = cz.Meta(); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(cz.Can, want) {
+		t.Errorf("Meta: got %q, want %q", cz.Can, want)
+	}
+}
+
+// TestCanonNotObject tests that non-object JSON errors instead of panicking.
+func TestCanonNotObject(t *testing.T) {
+	for _, in := range []string{`null`, `[]`, `"a"`, `1`} {
+		if _, err := Canon([]byte(in)); err == nil {
+			t.Errorf("Canon(%s) should error", in)
+		}
+		cz := new(Coz)
+		if err := json.Unmarshal([]byte(`{"pay":`+in+`,"sig":"AA"}`), cz); err != nil {
+			continue
+		}
+		if err := cz.MetaWithAlg(SEAlg(ES256)); err == nil {
+			t.Errorf("Meta with pay %s should error", in)
 		}
 	}
 }
