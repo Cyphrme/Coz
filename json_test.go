@@ -403,6 +403,26 @@ func TestPayMarshalStruct(t *testing.T) {
 	}
 }
 
+// TestCanonicalRaw tests that Canonical only reorders top level fields and
+// removes whitespace, and does not change values.
+func TestCanonicalRaw(t *testing.T) {
+	in := `{"s":"\u0041<&>", "n":12345678901234567890, "f":1.0, "z":{"b":1, "a":[2]}}`
+	want := `{"z":{"b":1,"a":[2]},"n":12345678901234567890,"f":1.0,"s":"\u0041<&>"}`
+	b, err := Canonical([]byte(in), []string{"z", "n", "f", "s"})
+	if err != nil || string(b) != want {
+		t.Errorf("Canonical: got %s, %v, want %s", b, err, want)
+	}
+
+	// SignPayJSON updates `now` without changing other values.
+	cz, err := GoldenKey.SignPayJSON([]byte(`{"alg":"ES256","now":1,"n":12345678901234567890,"z":{"b":1,"a":2}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(cz.Pay, []byte(`,"n":12345678901234567890,"z":{"b":1,"a":2}}`)) {
+		t.Errorf("SignPayJSON: got %s", cz.Pay)
+	}
+}
+
 // jsonGolden was generated from the encoding/json (v1) implementation.
 var jsonGolden = map[string]string{
 	"Marshal all runes":              "ae6d9cc0986cec05302180c9d6f278e9cab5b54998db9d37f50ad867d6897081",
@@ -417,12 +437,12 @@ var jsonGolden = map[string]string{
 	"Marshal Pay":                    "{\"alg\":\"ES256\",\"now\":1623132000,\"tmb\":\"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg\",\"typ\":\"<&>\",\"rvk\":1}",
 	"Marshal Pay with typed Struct":  "{\"alg\":\"ES256\",\"S\":\"<&>\\u2028\",\"Z\":0,\"NS\":null,\"NM\":null,\"B\":null}",
 	"Marshal Pay with map Struct":    "{\"alg\":\"ES256\",\"a\":\"x\",\"z\":1}",
-	"Marshal Pay round trip":         "{\"z\":1,\"alg\":\"ES256\",\"a\":\"<&>\",\"now\":1,\"m\":{\"a\":2,\"b\":1}}",
+	"Marshal Pay round trip":         "{\"z\":1,\"alg\":\"ES256\",\"a\":\"<&>\",\"now\":1,\"m\":{\"b\":1,\"a\":2}}",
 	"Marshal Coz":                    "{\"pay\":{\"msg\":\"Coz is a cryptographic JSON messaging specification.\",\"alg\":\"ES256\",\"now\":1623132000,\"tmb\":\"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg\",\"typ\":\"cyphr.me/msg/create\"},\"key\":{\"alg\":\"ES256\",\"prv\":\"bNstg4_H3m3SlROufwRSEgibLrBuRq9114OvdapcpVA\",\"now\":1623132000,\"tag\":\"Zami's Majuscule Key.\",\"tmb\":\"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg\",\"pub\":\"2nTOaFVm2QLxmUO_SjgyscVHBtvHEfo2rq65MvgNRjORojq39Haq9rXNxvXxwba_Xj0F5vZibJR3isBdOWbo5g\"},\"sig\":\"OJ4_timgp-wxpLF3hllrbe55wdjhzGOLgRYsGO1BmIMYbo4VKAdgZHnYyIU907ZTJkVr8B81A2K8U4nQA6ONEg\"}",
 	"MarshalPretty Coz":              "{\n    \"pay\": {\n        \"msg\": \"Coz is a cryptographic JSON messaging specification.\",\n        \"alg\": \"ES256\",\n        \"now\": 1623132000,\n        \"tmb\": \"U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg\",\n        \"typ\": \"cyphr.me/msg/create\"\n    },\n    \"sig\": \"OJ4_timgp-wxpLF3hllrbe55wdjhzGOLgRYsGO1BmIMYbo4VKAdgZHnYyIU907ZTJkVr8B81A2K8U4nQA6ONEg\"\n}",
 	"Canon":                          "[\"z\" \"alg\" \"a\" \"é\"]",
 	"Canonical nil":                  "{\"z\":1,\"a\":\"<&>\u2028\\u0041\",\"m\":{\"b\":1.0,\"a\":[1e3]}}",
-	"Canonical canon":                "{\"m\":{\"a\":[2],\"b\":1},\"a\":\"<&>\",\"x\":\"\\u2028\",\"n\":1}",
+	"Canonical canon":                "{\"m\":{\"b\":1,\"a\":[2]},\"a\":\"<&>\",\"x\":\"\\u2028\",\"n\":1.0}",
 	"Canonical struct":               "{\"msg\":\"<&>\"}",
 	"Thumbprint":                     "U5XUZots-WmQYcQWmsO751Xk0yeVi9XUKWQ2mGz6Aqg",
 	"Meta GoldenCoz":                 "[\"msg\" \"alg\" \"now\" \"tmb\" \"typ\"] XzrXMGnY0QFwAKkr43Hh-Ku3yUS8NVE0BdzSlMLSuTU xrYMu87EXes58PnEACcDW1t0jF2ez4FCN-njTF0MHNo",

@@ -42,7 +42,8 @@ func Canonical(input []byte, canon any) (b []byte, err error) {
 	s, ok := canon.([]string)
 	if ok {
 		// Unmarshal into a map to get all values, then marshal in canon order.
-		m := make(map[string]any)
+		// Values are kept as given, other than whitespace.
+		m := make(map[string]jsontext.Value)
 		err = json.Unmarshal(input, &m)
 		if err != nil {
 			return nil, jsonErr(err)
@@ -69,7 +70,7 @@ func Canonical(input []byte, canon any) (b []byte, err error) {
 // orderedObject marshals m as a JSON object in the order of keys.
 type orderedObject struct {
 	keys []string
-	m    map[string]any
+	m    map[string]jsontext.Value
 }
 
 // MarshalJSONTo implements [json.MarshalerTo].
