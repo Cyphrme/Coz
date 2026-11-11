@@ -20,8 +20,10 @@ package coz
 import (
 	"bytes"
 	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"strconv"
 	"strings"
@@ -132,7 +134,7 @@ func (cz *Coz) MetaWithAlg(alg SEAlg) (err error) {
 // UnmarshalJSON unmarshals checks for duplicates and unmarshals `coz`.
 // See notes on [Pay.UnmarshalJSON].
 func (cz *Coz) UnmarshalJSON(b []byte) error {
-	_, err := checkDuplicate(json.NewDecoder(bytes.NewReader(b)))
+	_, err := checkJSON(b)
 	if err != nil {
 		return err
 	}
@@ -245,7 +247,7 @@ func (p *Pay) MarshalJSON() ([]byte, error) {
 // error on duplicate. (Duplicate related, see
 // https://github.com/golang/go/issues/48298)
 func (p *Pay) UnmarshalJSON(b []byte) (err error) {
-	canon, err := checkDuplicate(json.NewDecoder(bytes.NewReader(b)))
+	canon, err := checkJSON(b)
 	if err != nil {
 		return err
 	}
@@ -462,64 +464,47 @@ func isRevoke(rvk Timestamp) bool {
 // ErrJSONDuplicate allows applications to check for JSON duplicate error.
 type ErrJSONDuplicate error
 
-// checkDuplicate checks for JSON duplicates and if not duplicated returns the
-// top level unique keys. See notes on Marshal and the README FAQ on duplicates.
-func checkDuplicate(d *json.Decoder) (topLevelObjectKeys []string, e error) {
-	t, err := d.Token()
-	if err != nil {
-		return nil, err
-	}
-
-	// Is it a delimiter?
-	delim, ok := t.(json.Delim)
-	if !ok {
-		return nil, nil // scaler type, nothing to do
-	}
-
-	switch delim {
-	case '{':
-		keysBool := make(map[string]bool)
-		var keys []string // preserves order
-
-		for d.More() {
-			t, err := d.Token()
+// checkJSON checks that b is a single JSON value with valid UTF-8 and no
+// duplicate names at any depth. If b is an object, checkJSON returns its top
+// level names in order. See notes on Marshal and the README FAQ on duplicates.
+func checkJSON(b []byte) (topLevelNames []string, err error) {
+	d := jsontext.NewDecoder(bytes.NewReader(b))
+	if d.PeekKind() == '{' {
+		if _, err = d.ReadToken(); err != nil {
+			return nil, jsonErr(err)
+		}
+		for d.PeekKind() == '"' {
+			t, err := d.ReadToken()
 			if err != nil {
-				return nil, err
+				return nil, jsonErr(err)
 			}
-
-			key := t.(string)
-			if keysBool[key] {
-				return nil, ErrJSONDuplicate(fmt.Errorf("Coz: JSON duplicate field %q", key))
-			}
-
-			keysBool[key] = true
-			keys = append(keys, key)
-
-			// Recursive, Check value in case value is object.
-			if _, err = checkDuplicate(d); err != nil {
-				return nil, err
+			topLevelNames = append(topLevelNames, t.String())
+			if err = d.SkipValue(); err != nil {
+				return nil, jsonErr(err)
 			}
 		}
-
-		// consume trailing }
-		if _, err := d.Token(); err != nil {
-			return nil, err
+		if _, err = d.ReadToken(); err != nil { // consume trailing }
+			return nil, jsonErr(err)
 		}
-
-		return keys, nil
-
-	case '[':
-		for d.More() {
-			if _, err := checkDuplicate(d); err != nil {
-				return nil, err
-			}
-		}
-		// consume trailing ]
-		if _, err := d.Token(); err != nil {
-			return nil, err
-		}
+	} else if err = d.SkipValue(); err != nil {
+		return nil, jsonErr(err)
 	}
-	return nil, nil
+	if _, err = d.ReadToken(); err != io.EOF {
+		if err == nil {
+			err = errors.New("Coz: invalid data after top-level value")
+		}
+		return nil, jsonErr(err)
+	}
+	return topLevelNames, nil
+}
+
+// jsonErr converts a JSON duplicate name error into [ErrJSONDuplicate].
+func jsonErr(err error) error {
+	var se *jsontext.SyntacticError
+	if errors.As(err, &se) && errors.Is(se.Err, jsontext.ErrDuplicateName) {
+		return ErrJSONDuplicate(fmt.Errorf("Coz: JSON duplicate field %q", se.JSONPointer.LastToken()))
+	}
+	return err
 }
 
 // Timestamp is positive UTC Unix time in seconds with a max value of 2^53 - 1.
